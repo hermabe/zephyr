@@ -9,10 +9,12 @@
 #include <sys/byteorder.h>
 #include <sys/check.h>
 
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/iso.h>
 #include <bluetooth/buf.h>
 #include <bluetooth/direction.h>
+#include <bluetooth/addr.h>
 
 #include "hci_core.h"
 #include "conn_internal.h"
@@ -27,6 +29,41 @@ static bt_le_scan_cb_t *scan_dev_found_cb;
 static sys_slist_t scan_cbs = SYS_SLIST_STATIC_INIT(&scan_cbs);
 
 #if defined(CONFIG_BT_EXT_ADV)
+/* A buffer pool used to reassemble advertisement data from the controller. */
+NET_BUF_POOL_FIXED_DEFINE(ext_scan_buf_pool, 1, CONFIG_BT_EXT_SCAN_BUF_SIZE, 8, NULL);
+static struct net_buf *ext_scan_buf;
+
+struct fragmented_advertiser {
+	bt_addr_le_t addr;
+	uint8_t sid;
+	struct net_buf *reassembly_buffer;
+};
+
+static struct fragmented_advertiser reassembling_advertiser;
+static struct fragmented_advertiser *p_reassembling_advertiser = NULL;
+
+static bool fragmented_advertisers_equal(const struct fragmented_advertiser *a,
+					 const bt_addr_le_t *addr, uint8_t sid)
+{
+	/* Two advertisers are equal if they are the same adv set from the same device */
+	return a->sid == sid && bt_addr_le_cmp(&a->addr, addr) == 0;
+}
+
+/* Sets the address and sid of the advertiser to be reassembled.
+ * Sets the pointer to the advertiser to be reassembled and returns it.
+ */
+static void init_reassembling_advertiser(const bt_addr_le_t *addr,
+								  uint8_t sid)
+{
+	__ASSERT_NO_MSG(!p_reassembling_advertiser);
+
+	p_reassembling_advertiser = &reassembling_advertiser;
+
+	bt_addr_le_copy(&p_reassembling_advertiser->addr, addr);
+	p_reassembling_advertiser->sid = sid;
+	p_reassembling_advertiser->reassembly_buffer = ext_scan_buf;
+}
+
 #if defined(CONFIG_BT_PER_ADV_SYNC)
 static struct bt_le_per_adv_sync *get_pending_per_adv_sync(void);
 static struct bt_le_per_adv_sync per_adv_sync_pool[CONFIG_BT_PER_ADV_SYNC_MAX];
@@ -37,6 +74,14 @@ static sys_slist_t pa_sync_cbs = SYS_SLIST_STATIC_INIT(&pa_sync_cbs);
 void bt_scan_reset(void)
 {
 	scan_dev_found_cb = NULL;
+#if defined(CONFIG_BT_EXT_ADV)
+	if (ext_scan_buf) {
+		net_buf_reset(ext_scan_buf);
+	} else {
+		ext_scan_buf = net_buf_alloc(&ext_scan_buf_pool, K_NO_WAIT);
+		__ASSERT_NO_MSG(ext_scan_buf);
+	}
+#endif
 }
 
 static int set_le_ext_scan_enable(uint8_t enable, uint16_t duration)
@@ -391,8 +436,8 @@ static uint8_t get_adv_props(uint8_t evt_type)
 	}
 }
 
-static void le_adv_recv(bt_addr_le_t *addr, struct bt_le_scan_recv_info *info,
-			struct net_buf *buf, uint8_t len)
+static void le_adv_recv(bt_addr_le_t *addr, struct bt_le_scan_recv_info *info, struct net_buf *buf,
+			uint16_t len)
 {
 	struct bt_le_scan_cb *listener, *next;
 	struct net_buf_simple_state state;
@@ -507,15 +552,37 @@ static uint8_t get_adv_type(uint8_t evt_type)
 	}
 }
 
+static void create_ext_adv_info(struct bt_hci_evt_le_ext_advertising_info const *const evt,
+				struct bt_le_scan_recv_info *const adv_info)
+{
+	adv_info->primary_phy = bt_get_phy(evt->prim_phy);
+	adv_info->secondary_phy = bt_get_phy(evt->sec_phy);
+	adv_info->tx_power = evt->tx_power;
+	adv_info->rssi = evt->rssi;
+	adv_info->sid = evt->sid;
+	adv_info->interval = sys_le16_to_cpu(evt->interval);
+	adv_info->adv_type = get_adv_type(evt->evt_type);
+	/* Convert "Legacy" property to Extended property. */
+	adv_info->adv_props = evt->evt_type ^ BT_HCI_LE_ADV_PROP_LEGACY;
+	adv_info->adv_props &= BIT_MASK(5);
+}
+
 void bt_hci_le_adv_ext_report(struct net_buf *buf)
 {
 	uint8_t num_reports = net_buf_pull_u8(buf);
 
-	BT_DBG("Adv number of reports %u",  num_reports);
+	BT_DBG("Adv number of reports %u", num_reports);
 
 	while (num_reports--) {
 		struct bt_hci_evt_le_ext_advertising_info *evt;
 		struct bt_le_scan_recv_info adv_info;
+		uint8_t size_to_copy;
+		bool truncate;
+		bool legacy_pdu_used;
+		uint16_t data_status;
+		bool is_report_complete;
+		bool more_to_come;
+		bool ctrl_truncated;
 
 		if (buf->len < sizeof(*evt)) {
 			BT_ERR("Unexpected end of buffer");
@@ -523,33 +590,106 @@ void bt_hci_le_adv_ext_report(struct net_buf *buf)
 		}
 
 		evt = net_buf_pull_mem(buf, sizeof(*evt));
+		legacy_pdu_used = evt->evt_type & BT_HCI_LE_ADV_EVT_TYPE_LEGACY;
+		data_status = BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS(evt->evt_type);
+		is_report_complete = data_status == BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS_COMPLETE;
+		more_to_come = data_status == BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS_PARTIAL;
+		ctrl_truncated = data_status == BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS_INCOMPLETE;
 
-		adv_info.primary_phy = bt_get_phy(evt->prim_phy);
-		adv_info.secondary_phy = bt_get_phy(evt->sec_phy);
-		adv_info.tx_power = evt->tx_power;
-		adv_info.rssi = evt->rssi;
-		adv_info.sid = evt->sid;
-		adv_info.interval = sys_le16_to_cpu(evt->interval);
-
-		adv_info.adv_type = get_adv_type(evt->evt_type);
-		/* Convert "Legacy" property to Extended property. */
-		adv_info.adv_props = evt->evt_type ^ BT_HCI_LE_ADV_PROP_LEGACY;
-
-		if (BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS(evt->evt_type) ==
-		    BT_HCI_LE_ADV_EVT_TYPE_DATA_STATUS_PARTIAL) {
-			/* Handling of incomplete reports is currently not
-			 * handled in the host. The remaining advertising
-			 * reports may therefore contain partial data.
-			 */
-			BT_WARN("Incomplete adv report");
+		if (legacy_pdu_used) {
+			/* Complete advertising report.
+			 * Does not need reassembly, create event immediately
+			*/
+			create_ext_adv_info(evt, &adv_info);
+			le_adv_recv(&evt->addr, &adv_info, buf, evt->length);
+			continue;
 		}
 
-		le_adv_recv(&evt->addr, &adv_info, buf, evt->length);
+		const bool is_new_advertiser =
+			!p_reassembling_advertiser ||
+			!fragmented_advertisers_equal(p_reassembling_advertiser, &evt->addr,
+						      evt->sid);
+
+		if (is_new_advertiser && is_report_complete) {
+			/* Only adv report from this advertiser.
+			 * Create event immeadiately.
+			 */
+			create_ext_adv_info(evt, &adv_info);
+			le_adv_recv(&evt->addr, &adv_info, buf, evt->length);
+			continue;
+		}
+
+		if (is_new_advertiser && p_reassembling_advertiser) {
+			BT_ERR("Received an incomplete advertising report while reassembling advertising\n"
+			       "reports from a different advertiser. The advertising report is discarded and\n"
+			       "all future scan results may be incomplete. Interleaving of fragmented\n"
+			       "advertising reports from different advertisers is not yet supported.");
+			net_buf_pull_mem(buf, evt->length);
+			continue;
+		}
+
+		if (is_new_advertiser) {
+			/* We are not reassembling reports from an advertiser and
+			 * this is the first report from the new advertiser.
+			 * Initialize the new advertiser
+			 */
+			__ASSERT_NO_MSG(!p_reassembling_advertiser);
+			init_reassembling_advertiser(&evt->addr, evt->sid);
+		}
+
+		if (!p_reassembling_advertiser->reassembly_buffer) {
+			/* The reports have been truncated and event created.
+			 * Discard the new report.
+			 */
+			net_buf_pull_mem(buf, evt->length);
+			if (!more_to_come) {
+				/* We do no longer need to keep track of this advertiser as
+				 * all the expected data is received.
+				 */
+				p_reassembling_advertiser = NULL;
+			}
+			continue;
+		}
+
+		/* Find the maximum amount of data that can be added to the reassembly buffer */
+		if (evt->length + ext_scan_buf->len > net_buf_max_len(ext_scan_buf)) {
+			size_to_copy = net_buf_max_len(ext_scan_buf) - ext_scan_buf->len;
+			truncate = true;
+		} else {
+			size_to_copy = evt->length;
+			truncate = false;
+		}
+
+		net_buf_add_mem(ext_scan_buf, buf->data, size_to_copy);
+		if (!truncate && more_to_come) {
+			/* The controller will send additional reports to be reassembled */
+			continue;
+		}
+
+		/* Either we have truncated or there is no more data coming from the controller.
+		 * Create event.
+		 */
+		create_ext_adv_info(evt, &adv_info);
+		if (truncate || ctrl_truncated) {
+			adv_info.adv_props |= BT_GAP_ADV_PROP_REPORT_TRUNCATED;
+		}
+
+		le_adv_recv(&evt->addr, &adv_info, ext_scan_buf, ext_scan_buf->len);
+		net_buf_reset(ext_scan_buf);
+
+		if (truncate && more_to_come) {
+			/* We have truncated the data and the controller will provide more data.
+			 * Therefore we must discard the remaining part of the advertisement.
+			 */
+			p_reassembling_advertiser->reassembly_buffer = NULL;
+		} else {
+			/* No more data will come. We do no longer need to keep track of this advertiser */
+			p_reassembling_advertiser = NULL;
+		}
 
 		net_buf_pull(buf, evt->length);
 	}
 }
-
 
 #if defined(CONFIG_BT_PER_ADV_SYNC)
 static void per_adv_sync_delete(struct bt_le_per_adv_sync *per_adv_sync)
