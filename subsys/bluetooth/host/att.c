@@ -571,6 +571,7 @@ static int bt_att_chan_req_send(struct bt_att_chan *chan,
 	return chan_req_send(chan, req);
 }
 
+#ifdef CONFIG_BT_EATT
 static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
 					   enum bt_att_bearer_option bearer_option)
 {
@@ -585,6 +586,7 @@ static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
 	BT_ERR("Unknown bearer option: %d", bearer_option);
 	CODE_UNREACHABLE;
 }
+#endif /* CONFIG_BT_EATT */
 
 static void att_req_send_process(struct bt_att *att)
 {
@@ -602,10 +604,11 @@ static void att_req_send_process(struct bt_att *att)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE (&att->chans, chan, tmp, node) {
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
-			if (IS_ENABLED(CONFIG_BT_EATT) &&
-			    !att_chan_matches_bearer_option(chan, ATT_REQ(node)->bearer_option)) {
+#ifdef CONFIG_BT_EATT
+			if (!att_chan_matches_bearer_option(chan, ATT_REQ(node)->bearer_option)) {
 				continue;
 			}
+#endif /* CONFIG_BT_EATT */
 
 			if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
 				return;
