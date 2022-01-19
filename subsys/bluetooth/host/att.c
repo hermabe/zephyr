@@ -394,17 +394,10 @@ static bt_conn_tx_cb_t att_cb(bt_att_chan_sent_t cb)
 	}
 }
 
-struct net_buf *bt_att_chan_create_pdu(struct bt_att_chan *chan, uint8_t op,
-				       size_t len)
+struct net_buf *bt_att_chan_create_pdu(uint8_t op, size_t len)
 {
 	struct bt_att_hdr *hdr;
 	struct net_buf *buf;
-
-	if (len + sizeof(op) > chan->chan.tx.mtu) {
-		BT_WARN("ATT MTU exceeded, max %u, wanted %zu",
-			chan->chan.tx.mtu, len + sizeof(op));
-		return NULL;
-	}
 
 	switch (att_op_get_type(op)) {
 	case ATT_RESPONSE:
@@ -489,7 +482,7 @@ static void send_err_rsp(struct bt_att_chan *chan, uint8_t req, uint16_t handle,
 		return;
 	}
 
-	buf = bt_att_chan_create_pdu(chan, BT_ATT_OP_ERROR_RSP, sizeof(*rsp));
+	buf = bt_att_chan_create_pdu(BT_ATT_OP_ERROR_RSP, sizeof(*rsp));
 	if (!buf) {
 		return;
 	}
@@ -504,7 +497,6 @@ static void send_err_rsp(struct bt_att_chan *chan, uint8_t req, uint16_t handle,
 
 static uint8_t att_mtu_req(struct bt_att_chan *chan, struct net_buf *buf)
 {
-	struct bt_conn *conn = chan->att->conn;
 	struct bt_att_exchange_mtu_req *req;
 	struct bt_att_exchange_mtu_rsp *rsp;
 	struct net_buf *pdu;
@@ -528,7 +520,7 @@ static uint8_t att_mtu_req(struct bt_att_chan *chan, struct net_buf *buf)
 		return BT_ATT_ERR_INVALID_PDU;
 	}
 
-	pdu = bt_att_create_pdu(conn, BT_ATT_OP_MTU_RSP, sizeof(*rsp));
+	pdu = bt_att_create_pdu(BT_ATT_OP_MTU_RSP, sizeof(*rsp));
 	if (!pdu) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -758,12 +750,11 @@ static uint8_t find_info_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 static uint8_t att_find_info_rsp(struct bt_att_chan *chan, uint16_t start_handle,
 			      uint16_t end_handle)
 {
-	struct bt_conn *conn = chan->chan.chan.conn;
 	struct find_info_data data;
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_FIND_INFO_RSP, 0);
+	data.buf = bt_att_create_pdu(BT_ATT_OP_FIND_INFO_RSP, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -914,12 +905,11 @@ static uint8_t att_find_type_rsp(struct bt_att_chan *chan, uint16_t start_handle
 			      uint16_t end_handle, const void *value,
 			      uint8_t value_len)
 {
-	struct bt_conn *conn = chan->chan.chan.conn;
 	struct find_type_data data;
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_FIND_TYPE_RSP, 0);
+	data.buf = bt_att_create_pdu(BT_ATT_OP_FIND_TYPE_RSP, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1146,13 +1136,11 @@ static uint8_t read_type_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 static uint8_t att_read_type_rsp(struct bt_att_chan *chan, struct bt_uuid *uuid,
 			      uint16_t start_handle, uint16_t end_handle)
 {
-	struct bt_conn *conn = chan->chan.chan.conn;
 	struct read_type_data data;
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_READ_TYPE_RSP,
-				     sizeof(*data.rsp));
+	data.buf = bt_att_create_pdu(BT_ATT_OP_READ_TYPE_RSP, sizeof(*data.rsp));
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1271,7 +1259,7 @@ static uint8_t att_read_rsp(struct bt_att_chan *chan, uint8_t op, uint8_t rsp,
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, rsp, 0);
+	data.buf = bt_att_create_pdu(rsp, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1341,7 +1329,7 @@ static uint8_t att_read_mult_req(struct bt_att_chan *chan, struct net_buf *buf)
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_READ_MULT_RSP, 0);
+	data.buf = bt_att_create_pdu(BT_ATT_OP_READ_MULT_RSP, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1435,7 +1423,7 @@ static uint8_t att_read_mult_vl_req(struct bt_att_chan *chan, struct net_buf *bu
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_READ_MULT_VL_RSP, 0);
+	data.buf = bt_att_create_pdu(BT_ATT_OP_READ_MULT_VL_RSP, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1554,13 +1542,11 @@ static uint8_t read_group_cb(const struct bt_gatt_attr *attr, uint16_t handle,
 static uint8_t att_read_group_rsp(struct bt_att_chan *chan, struct bt_uuid *uuid,
 			       uint16_t start_handle, uint16_t end_handle)
 {
-	struct bt_conn *conn = chan->chan.chan.conn;
 	struct read_group_data data;
 
 	(void)memset(&data, 0, sizeof(data));
 
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_READ_GROUP_RSP,
-				     sizeof(*data.rsp));
+	data.buf = bt_att_create_pdu(BT_ATT_OP_READ_GROUP_RSP, sizeof(*data.rsp));
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1701,7 +1687,7 @@ static uint8_t att_write_rsp(struct bt_att_chan *chan, uint8_t req, uint8_t rsp,
 
 	/* Only allocate buf if required to respond */
 	if (rsp) {
-		data.buf = bt_att_chan_create_pdu(chan, rsp, 0);
+		data.buf = bt_att_chan_create_pdu(rsp, 0);
 		if (!data.buf) {
 			return BT_ATT_ERR_UNLIKELY;
 		}
@@ -1841,7 +1827,7 @@ static uint8_t att_prep_write_rsp(struct bt_att_chan *chan, uint16_t handle,
 	net_buf_slist_put(&chan->att->prep_queue, data.buf);
 
 	/* Generate response */
-	data.buf = bt_att_create_pdu(conn, BT_ATT_OP_PREPARE_WRITE_RSP, 0);
+	data.buf = bt_att_create_pdu(BT_ATT_OP_PREPARE_WRITE_RSP, 0);
 	if (!data.buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -1933,7 +1919,6 @@ static uint8_t exec_write_reassemble(uint16_t handle, uint16_t offset,
 
 static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 {
-	struct bt_conn *conn = chan->chan.chan.conn;
 	struct net_buf *buf;
 	uint8_t err = 0U;
 
@@ -1990,7 +1975,7 @@ static uint8_t att_exec_write_rsp(struct bt_att_chan *chan, uint8_t flags)
 	}
 
 	/* Generate response */
-	buf = bt_att_create_pdu(conn, BT_ATT_OP_EXEC_WRITE_RSP, 0);
+	buf = bt_att_create_pdu(BT_ATT_OP_EXEC_WRITE_RSP, 0);
 	if (!buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}
@@ -2274,7 +2259,7 @@ static uint8_t att_indicate(struct bt_att_chan *chan, struct net_buf *buf)
 
 	bt_gatt_notification(chan->att->conn, handle, buf->data, buf->len);
 
-	buf = bt_att_chan_create_pdu(chan, BT_ATT_OP_CONFIRM, 0);
+	buf = bt_att_chan_create_pdu(BT_ATT_OP_CONFIRM, 0);
 	if (!buf) {
 		return 0;
 	}
@@ -2584,27 +2569,9 @@ static struct bt_att *att_get(struct bt_conn *conn)
 	return att_chan->att;
 }
 
-struct net_buf *bt_att_create_pdu(struct bt_conn *conn, uint8_t op, size_t len)
+struct net_buf *bt_att_create_pdu(uint8_t op, size_t len)
 {
-	struct bt_att *att;
-	struct bt_att_chan *chan, *tmp;
-
-	att = att_get(conn);
-	if (!att) {
-		return NULL;
-	}
-
-	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
-		if (len + sizeof(op) > chan->chan.tx.mtu) {
-			continue;
-		}
-
-		return bt_att_chan_create_pdu(chan, op, len);
-	}
-
-	BT_WARN("No ATT channel for MTU %zu", len + sizeof(op));
-
-	return NULL;
+	return bt_att_chan_create_pdu(op, len);
 }
 
 static void att_reset(struct bt_att *att)
@@ -2765,8 +2732,7 @@ static uint8_t att_req_retry(struct bt_att_chan *att_chan)
 		return BT_ATT_ERR_AUTHENTICATION;
 	}
 
-
-	buf = bt_att_chan_create_pdu(att_chan, req->att_op, req->len);
+	buf = bt_att_chan_create_pdu(req->att_op, req->len);
 	if (!buf) {
 		return BT_ATT_ERR_UNLIKELY;
 	}

@@ -1936,8 +1936,7 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
 	}
 
 	if (!*buf) {
-		*buf = bt_att_create_pdu(conn, BT_ATT_OP_NOTIFY_MULT,
-					 sizeof(*nfy) + params->len);
+		*buf = bt_att_create_pdu(BT_ATT_OP_NOTIFY_MULT, sizeof(*nfy) + params->len);
 		if (!*buf) {
 			return -ENOMEM;
 		}
@@ -1991,8 +1990,7 @@ static int gatt_notify(struct bt_conn *conn, uint16_t handle,
 	}
 #endif /* CONFIG_BT_GATT_NOTIFY_MULTIPLE */
 
-	buf = bt_att_create_pdu(conn, BT_ATT_OP_NOTIFY,
-				sizeof(*nfy) + params->len);
+	buf = bt_att_create_pdu(BT_ATT_OP_NOTIFY, sizeof(*nfy) + params->len);
 	if (!buf) {
 		BT_WARN("No buffer available to send notification");
 		return -ENOMEM;
@@ -2049,9 +2047,8 @@ static struct bt_att_req *gatt_req_alloc(bt_att_func_t func, void *params,
 }
 
 #ifdef CONFIG_BT_GATT_CLIENT
-static int gatt_req_send(struct bt_conn *conn, bt_att_func_t func, void *params,
-			 bt_att_encode_t encode, uint8_t op, size_t len)
-
+static int gatt_req_send(bt_att_func_t func, void *params, bt_att_encode_t encode, uint8_t op,
+			 size_t len)
 {
 	struct bt_att_req *req;
 	struct net_buf *buf;
@@ -2062,7 +2059,7 @@ static int gatt_req_send(struct bt_conn *conn, bt_att_func_t func, void *params,
 		return -ENOMEM;
 	}
 
-	buf = bt_att_create_pdu(conn, op, len);
+	buf = bt_att_create_pdu(op, len);
 	if (!buf) {
 		bt_att_req_free(req);
 		return -ENOMEM;
@@ -2122,7 +2119,7 @@ static int gatt_indicate(struct bt_conn *conn, uint16_t handle,
 		return -ENOMEM;
 	}
 
-	buf = bt_att_create_pdu(conn, BT_ATT_OP_INDICATE, len);
+	buf = bt_att_create_pdu(BT_ATT_OP_INDICATE, len);
 	if (!buf) {
 		BT_WARN("No buffer available to send indication");
 		bt_att_req_free(req);
@@ -3923,8 +3920,7 @@ static int gatt_read_blob_encode(struct net_buf *buf, size_t len,
 	return 0;
 }
 
-static int gatt_read_blob(struct bt_conn *conn,
-			  struct bt_gatt_read_params *params)
+int gatt_read_blob(struct bt_conn *conn, struct bt_gatt_read_params *params)
 {
 	BT_DBG("handle 0x%04x offset 0x%04x", params->single.handle,
 	       params->single.offset);
@@ -3953,8 +3949,7 @@ static int gatt_read_uuid_encode(struct net_buf *buf, size_t len,
 	return 0;
 }
 
-static int gatt_read_uuid(struct bt_conn *conn,
-			  struct bt_gatt_read_params *params)
+static int gatt_read_uuid(struct bt_conn *conn, struct bt_gatt_read_params *params)
 {
 	BT_DBG("start_handle 0x%04x end_handle 0x%04x uuid %s",
 		params->by_uuid.start_handle, params->by_uuid.end_handle,
@@ -3997,8 +3992,7 @@ static int gatt_read_mult_encode(struct net_buf *buf, size_t len,
 	return 0;
 }
 
-static int gatt_read_mult(struct bt_conn *conn,
-			  struct bt_gatt_read_params *params)
+static int gatt_read_mult(struct bt_conn *conn, struct bt_gatt_read_params *params)
 {
 	BT_DBG("handle_count %zu", params->handle_count);
 
@@ -4166,11 +4160,9 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 #endif
 
 	if (sign) {
-		buf = bt_att_create_pdu(conn, BT_ATT_OP_SIGNED_WRITE_CMD,
-					sizeof(*cmd) + length + 12);
+		buf = bt_att_create_pdu(BT_ATT_OP_SIGNED_WRITE_CMD, sizeof(*cmd) + length + 12);
 	} else {
-		buf = bt_att_create_pdu(conn, BT_ATT_OP_WRITE_CMD,
-					sizeof(*cmd) + length);
+		buf = bt_att_create_pdu(BT_ATT_OP_WRITE_CMD, sizeof(*cmd) + length);
 	}
 	if (!buf) {
 		return -ENOMEM;
