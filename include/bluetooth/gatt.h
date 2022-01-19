@@ -1442,6 +1442,7 @@ struct bt_gatt_read_params {
  *  @return 0 in case of success or negative value in case of error.
  */
 int bt_gatt_read(struct bt_conn *conn, struct bt_gatt_read_params *params);
+struct bt_att_req *bt_gatt_create_read_req(struct bt_gatt_read_params *params);
 
 struct bt_gatt_write_params;
 

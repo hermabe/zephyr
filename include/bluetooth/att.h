@@ -11,6 +11,7 @@
 #define ZEPHYR_INCLUDE_BLUETOOTH_ATT_H_
 
 #include <sys/slist.h>
+#include <bluetooth/l2cap.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,6 +58,60 @@ extern "C" {
 #if defined(CONFIG_BT_TESTING)
 int bt_eatt_disconnect_one(struct bt_conn *conn);
 #endif /* CONFIG_BT_TESTING */
+
+typedef void (*bt_att_func_t)(struct bt_conn *conn, uint8_t err, const void *pdu, uint16_t length,
+			      void *user_data);
+
+typedef int (*bt_att_encode_t)(struct net_buf *buf, size_t len, void *user_data);
+
+/* ATT request context */
+struct bt_att_req {
+	sys_snode_t node;
+	bt_att_func_t func;
+	struct net_buf *buf;
+#if defined(CONFIG_BT_SMP)
+	bt_att_encode_t encode;
+	uint8_t retrying : 1;
+	uint8_t att_op;
+	size_t len;
+#endif /* CONFIG_BT_SMP */
+	void *user_data;
+};
+
+enum {
+	ATT_PENDING_RSP,
+	ATT_PENDING_CFM,
+	ATT_DISCONNECTED,
+	ATT_ENHANCED,
+	ATT_PENDING_SENT,
+
+	/* Total number of flags - must be at the end of the enum */
+	ATT_NUM_FLAGS,
+};
+
+/* ATT channel specific data */
+struct bt_att_chan {
+	/* Connection this channel is associated with */
+	struct bt_att *att;
+	struct bt_l2cap_le_chan chan;
+	ATOMIC_DEFINE(flags, ATT_NUM_FLAGS);
+	struct bt_att_req *req;
+	struct k_fifo tx_queue;
+	struct k_work_delayable timeout_work;
+	void (*sent)(struct bt_att_chan *chan);
+	sys_snode_t node;
+};
+
+int bt_att_chan_req_send(struct bt_att_chan *chan, struct bt_att_req *req);
+
+/* Connect EATT channels */
+int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
+
+/* Disconnect EATT channels */
+int bt_eatt_disconnect(struct bt_conn *conn);
+
+struct bt_att_chan *bt_eatt_get_channel(struct bt_conn *conn);
+struct bt_att_chan *att_get_fixed_chan(struct bt_conn *conn);
 
 #ifdef __cplusplus
 }

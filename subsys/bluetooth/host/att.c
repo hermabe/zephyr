@@ -68,30 +68,6 @@ NET_BUF_POOL_DEFINE(prep_pool, CONFIG_BT_ATT_PREPARE_COUNT, BT_ATT_MTU,
 K_MEM_SLAB_DEFINE(req_slab, sizeof(struct bt_att_req),
 		  CONFIG_BT_L2CAP_TX_BUF_COUNT, __alignof__(struct bt_att_req));
 
-enum {
-	ATT_PENDING_RSP,
-	ATT_PENDING_CFM,
-	ATT_DISCONNECTED,
-	ATT_ENHANCED,
-	ATT_PENDING_SENT,
-
-	/* Total number of flags - must be at the end of the enum */
-	ATT_NUM_FLAGS,
-};
-
-/* ATT channel specific data */
-struct bt_att_chan {
-	/* Connection this channel is associated with */
-	struct bt_att		*att;
-	struct bt_l2cap_le_chan	chan;
-	ATOMIC_DEFINE(flags, ATT_NUM_FLAGS);
-	struct bt_att_req	*req;
-	struct k_fifo		tx_queue;
-	struct k_work_delayable	timeout_work;
-	void (*sent)(struct bt_att_chan *chan);
-	sys_snode_t		node;
-};
-
 /* ATT connection specific data */
 struct bt_att {
 	struct bt_conn		*conn;
@@ -549,8 +525,7 @@ static uint8_t att_mtu_req(struct bt_att_chan *chan, struct net_buf *buf)
 	return 0;
 }
 
-static int bt_att_chan_req_send(struct bt_att_chan *chan,
-				struct bt_att_req *req)
+int bt_att_chan_req_send(struct bt_att_chan *chan, struct bt_att_req *req)
 {
 	__ASSERT_NO_MSG(chan);
 	__ASSERT_NO_MSG(req);
@@ -2648,7 +2623,7 @@ static void att_timeout(struct k_work *work)
 	bt_att_disconnected(&chan->chan.chan);
 }
 
-static struct bt_att_chan *att_get_fixed_chan(struct bt_conn *conn)
+struct bt_att_chan *att_get_fixed_chan(struct bt_conn *conn)
 {
 	struct bt_l2cap_chan *chan;
 
@@ -3218,5 +3193,17 @@ struct bt_att_req *bt_att_find_req_by_user_data(struct bt_conn *conn, const void
 		}
 	}
 
+	return NULL;
+}
+
+struct bt_att_chan * bt_eatt_get_channel(struct bt_conn *conn)
+{
+	struct bt_att *att = att_get(conn);
+	struct bt_att_chan *chan;
+	SYS_SLIST_FOR_EACH_CONTAINER (&att->chans, chan, node) {
+		if (atomic_test_bit(chan->flags, ATT_ENHANCED)) {
+			return chan;
+		}
+	}
 	return NULL;
 }
