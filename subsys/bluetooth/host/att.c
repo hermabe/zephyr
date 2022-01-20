@@ -571,7 +571,6 @@ static int bt_att_chan_req_send(struct bt_att_chan *chan,
 	return chan_req_send(chan, req);
 }
 
-#ifdef CONFIG_BT_EATT
 static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
 					   enum bt_att_bearer_option bearer_option)
 {
@@ -586,7 +585,6 @@ static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
 	BT_ERR("Unknown bearer option: %d", bearer_option);
 	CODE_UNREACHABLE;
 }
-#endif /* CONFIG_BT_EATT */
 
 static void att_req_send_process(struct bt_att *att)
 {
@@ -604,11 +602,9 @@ static void att_req_send_process(struct bt_att *att)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE (&att->chans, chan, tmp, node) {
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
-#ifdef CONFIG_BT_EATT
 			if (!att_chan_matches_bearer_option(chan, ATT_REQ(node)->bearer_option)) {
 				continue;
 			}
-#endif /* CONFIG_BT_EATT */
 
 			if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
 				return;
@@ -2738,6 +2734,8 @@ static void att_chan_attach(struct bt_att *att, struct bt_att_chan *chan)
 	sys_slist_prepend(&att->chans, &chan->node);
 }
 
+void att_chan_connected(uint16_t cid);
+
 static void bt_att_connected(struct bt_l2cap_chan *chan)
 {
 	struct bt_att_chan *att_chan = att_get_fixed_chan(chan->conn);
@@ -2756,6 +2754,7 @@ static void bt_att_connected(struct bt_l2cap_chan *chan)
 	}
 
 	att_chan_mtu_updated(att_chan);
+	att_chan_connected(att_chan->chan.tx.cid);
 
 	k_work_init_delayable(&att_chan->timeout_work, att_timeout);
 }
@@ -3293,3 +3292,23 @@ struct bt_att_req *bt_att_find_req_by_user_data(struct bt_conn *conn, const void
 
 	return NULL;
 }
+
+#ifdef CONFIG_BT_EATT
+int bt_eatt_num_channels_connected(struct bt_conn *conn)
+{
+	struct bt_att *att = att_get(conn);
+
+	if (!att) {
+		return 0;
+	}
+
+	int n = 0;
+	struct bt_att_chan *chan;
+	SYS_SLIST_FOR_EACH_CONTAINER (&att->chans, chan, node) {
+		if (atomic_test_bit(chan->flags, ATT_ENHANCED)) {
+			n++;
+		}
+	}
+	return n;
+}
+#endif /* CONFIG_BT_EATT */

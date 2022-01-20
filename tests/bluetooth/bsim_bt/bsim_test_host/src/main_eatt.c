@@ -68,6 +68,10 @@ static uint8_t char_2_data[LENGTH_CHAR_2];
 static uint16_t char_1_attr_handle = 0;
 static uint16_t char_2_attr_handle = 0;
 
+static void eatt_chan_connected(uint16_t cid) {
+	printk("EATT channel connected. cid: 0x%X\n", cid);
+}
+
 static ssize_t read_char_1(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf,
 			   uint16_t len, uint16_t offset)
 {
@@ -261,7 +265,7 @@ static uint8_t discover_char_1_func(struct bt_conn *conn, const struct bt_gatt_a
 	discover_params_2.type = BT_GATT_DISCOVER_ATTRIBUTE;
 	discover_params_2.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params_2.func = discover_char_2_func;
-	// discover_params_2.bearer_option = BT_ATT_BEARER_ANY;
+	discover_params_2.bearer_option = BT_ATT_BEARER_ANY;
 
 	err = bt_gatt_discover(conn, &discover_params_2);
 	return BT_GATT_ITER_STOP;
@@ -285,7 +289,7 @@ static uint8_t discover_primary_handler_func(struct bt_conn *conn, const struct 
 	discover_params_2.type = BT_GATT_DISCOVER_ATTRIBUTE;
 	discover_params_2.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params_2.func = discover_char_1_func;
-	// discover_params_2.bearer_option = BT_ATT_BEARER_ANY;
+	discover_params_2.bearer_option = BT_ATT_BEARER_ANY;
 
 	err = bt_gatt_discover(conn, &discover_params_2);
 	if (err) {
@@ -352,7 +356,7 @@ void do_discover()
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params.type = BT_GATT_DISCOVER_PRIMARY;
-	// discover_params.bearer_option = BT_ATT_BEARER_ANY;
+	discover_params.bearer_option = BT_ATT_BEARER_ANY;
 
 	err = bt_gatt_discover(default_conn, &discover_params);
 	if (err) {
@@ -367,7 +371,7 @@ void do_discover()
 	printk("char_2_attr_handle: %d\n", char_2_attr_handle);
 }
 
-static void do_reads(/* enum bt_att_bearer_option bearer_option */)
+static void do_reads(enum bt_att_bearer_option bearer_option)
 {
 	int err;
 
@@ -377,7 +381,7 @@ static void do_reads(/* enum bt_att_bearer_option bearer_option */)
 							     .handle = char_1_attr_handle,
 							     .offset = 0x0000,
 						     },
-						     /* .bearer_option = bearer_option  */};
+						     .bearer_option = bearer_option };
 
 	struct bt_gatt_read_params read_params_2 = { .func = gatt_read_2_cb,
 						     .handle_count = 1,
@@ -385,7 +389,7 @@ static void do_reads(/* enum bt_att_bearer_option bearer_option */)
 							     .handle = char_2_attr_handle,
 							     .offset = 0x0000,
 						     },
-						     /* .bearer_option = bearer_option  */};
+						     .bearer_option = bearer_option };
 
 	err = bt_gatt_read(default_conn, &read_params_1);
 	if (err) {
@@ -432,14 +436,19 @@ static void test_central_main(void)
 		FAIL("MTU exchange failed (err %d)\n", err);
 	}
 
-#define N_EATT_CHANNELS 1
+	struct bt_gatt_cb cb = {
+		.eatt_chan_connected = eatt_chan_connected,
+	};
+	bt_gatt_cb_register(&cb);
+
+#define N_EATT_CHANNELS 5
 	printk("Connecting %d EATT channels\n", N_EATT_CHANNELS);
 
-	// err = bt_eatt_connect(default_conn, N_EATT_CHANNELS);
-	// if (err) {
-	// 	FAIL("Failed to connect EATT (err: %d)", err);
-	// }
-	// k_sleep(K_MSEC(100)); /* Wait a while for eatt enabling to finish */
+	err = bt_eatt_connect(default_conn, N_EATT_CHANNELS);
+	if (err) {
+		FAIL("Failed to connect EATT (err: %d)", err);
+	}
+	k_sleep(K_MSEC(100)); /* Wait a while for eatt enabling to finish */
 
 	/* Wait a bit to ensure that all LLCP have time to finish */
 	k_sleep(K_MSEC(1000));
@@ -447,13 +456,13 @@ static void test_central_main(void)
 	do_discover();
 
 	printk("Reading with flag BT_ATT_BEARER_UNENHANCED\n");
-	do_reads(/* BT_ATT_BEARER_UNENHANCED */);
+	do_reads(BT_ATT_BEARER_UNENHANCED);
 
 	printk("Reading with flag BT_ATT_BEARER_ENHANCED\n");
-	do_reads(/* BT_ATT_BEARER_ENHANCED */);
+	do_reads(BT_ATT_BEARER_ENHANCED);
 
 	printk("Reading with flag BT_ATT_BEARER_ANY\n");
-	do_reads(/* BT_ATT_BEARER_ANY */);
+	do_reads(BT_ATT_BEARER_ANY);
 
 	/* Wait for disconnect */
 	while (is_connected) {

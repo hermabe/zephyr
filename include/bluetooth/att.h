@@ -68,6 +68,9 @@ enum bt_att_bearer_option {
 /* Connect EATT channels */
 int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 
+/* Returns how many enhanced ATT bearers are connected */
+int bt_eatt_num_channels_connected(struct bt_conn *conn);
+
 /* Disconnect EATT channels */
 int bt_eatt_disconnect(struct bt_conn *conn);
 #endif /* CONFIG_BT_EATT */

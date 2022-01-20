@@ -202,6 +202,7 @@ struct bt_gatt_cb {
 	 *  @param rx Updated RX ATT MTU.
 	 */
 	void (*att_mtu_updated)(struct bt_conn *conn, uint16_t tx, uint16_t rx);
+	void (*eatt_chan_connected)(uint16_t cid);
 
 	sys_snode_t node;
 };

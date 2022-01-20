@@ -5076,6 +5076,17 @@ void bt_gatt_att_max_mtu_changed(struct bt_conn *conn, uint16_t tx, uint16_t rx)
 	}
 }
 
+void att_chan_connected(uint16_t cid)
+{
+	struct bt_gatt_cb *cb;
+
+	SYS_SLIST_FOR_EACH_CONTAINER (&callback_list, cb, node) {
+		if (cb->eatt_chan_connected) {
+			cb->eatt_chan_connected(cid);
+		}
+	}
+}
+
 void bt_gatt_encrypt_change(struct bt_conn *conn)
 {
 	struct conn_data data;
