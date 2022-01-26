@@ -3042,7 +3042,7 @@ static k_timeout_t credit_based_connection_delay(struct bt_conn *conn)
 	CODE_UNREACHABLE;
 }
 
-static int att_schedule_eatt_connect(struct bt_conn *conn, uint8_t eatt_chans_to_connect)
+int att_schedule_eatt_connect(struct bt_conn *conn, uint8_t eatt_chans_to_connect)
 {
 	struct bt_att *att = att_get(conn);
 

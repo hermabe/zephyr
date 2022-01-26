@@ -33,15 +33,23 @@ config BT_EATT
 	  enabled additional L2CAP channels can be connected as bearers enabling
 	  multiple outstanding request.
 
-if BT_EATT
-
 config BT_EATT_MAX
 	int "Maximum number of Enhanced ATT bearers"
+	depends on BT_EATT
 	default 3
 	range 1 16
 
 	help
 	  Number of Enhanced ATT bearers available.
+
+if BT_EATT
+
+config BT_EATT_AUTO_CONNECT
+	bool "Automatically connect EATT bearers when a link is established"
+	default y
+	help
+	  Try to connect BT_EATT_MAX enhanced ATT bearers when a connection to a
+	  new device is established
 
 config BT_EATT_SEC_LEVEL
 	int "Enhanced ATT bearer security level"
