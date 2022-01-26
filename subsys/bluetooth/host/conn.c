@@ -1221,6 +1221,19 @@ void bt_conn_connected(struct bt_conn *conn)
 {
 	bt_l2cap_connected(conn);
 	notify_connected(conn);
+
+#if defined(CONFIG_BT_EATT)
+	if (IS_ENABLED(CONFIG_BT_EATT_AUTO_CONNECT) && IS_ENABLED(CONFIG_BT_CENTRAL) &&
+	    conn->role == BT_CONN_ROLE_CENTRAL) {
+		const int err = att_schedule_eatt_connect(conn, CONFIG_BT_EATT_MAX);
+
+		if (err < 0) {
+			BT_WARN("Automatic creation of EATT bearers failed on "
+				"connection %p with error %d",
+				conn, err);
+		}
+	}
+#endif /* CONFIG_BT_EATT */
 }
 
 static int conn_disconnect(struct bt_conn *conn, uint8_t reason)

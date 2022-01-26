@@ -305,6 +305,9 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 /* Disconnect EATT channels */
 int bt_eatt_disconnect(struct bt_conn *conn);
 
+/* Schedule connection of Enhanced ATT channels */
+int att_schedule_eatt_connect(struct bt_conn *conn, uint8_t eatt_chans_to_connect);
+
 /** @brief Find a pending ATT request by its user_data pointer.
  *  @param conn The connection the request was issued on.
  *  @param user_data The pointer value to look for.
