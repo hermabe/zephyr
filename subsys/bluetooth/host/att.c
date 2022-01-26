@@ -103,6 +103,7 @@ struct bt_att {
 #endif
 	/* Contains bt_att_chan instance(s) */
 	sys_slist_t		chans;
+	struct k_work_delayable connection_work;
 };
 
 K_MEM_SLAB_DEFINE(att_slab, sizeof(struct bt_att),
@@ -2905,7 +2906,7 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 	}
 
 	if (k_mem_slab_alloc(&chan_slab, (void **)&chan, K_NO_WAIT)) {
-		BT_ERR("No available ATT channel for conn %p", att->conn);
+		BT_WARN("No available ATT channel for conn %p", att->conn);
 		return NULL;
 	}
 
@@ -2917,6 +2918,29 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 
 	return chan;
 }
+
+#if defined(CONFIG_BT_EATT)
+uint16_t bt_att_num_enhanced_bearers(struct bt_conn *conn)
+{
+	struct bt_att *att = att_get(conn);
+	struct bt_att_chan *chan;
+	uint16_t num_enhanced = 0;
+
+	SYS_SLIST_FOR_EACH_CONTAINER (&att->chans, chan, node) {
+		if (atomic_test_bit(chan->flags, ATT_ENHANCED)) {
+			num_enhanced++;
+		}
+	}
+
+	return num_enhanced;
+}
+
+static void att_enhanced_connection_work_handler(struct k_work *work){
+	struct k_work_delayable *dwork = k_work_delayable_from_work(work);
+	struct bt_att *att = CONTAINER_OF(dwork, struct bt_att, connection_work);
+	bt_eatt_connect(att->conn, CONFIG_BT_EATT_MAX - bt_att_num_enhanced_bearers(att->conn));
+}
+#endif /* CONFIG_BT_EATT */
 
 static int bt_att_accept(struct bt_conn *conn, struct bt_l2cap_chan **ch)
 {
@@ -2935,6 +2959,10 @@ static int bt_att_accept(struct bt_conn *conn, struct bt_l2cap_chan **ch)
 	sys_slist_init(&att->reqs);
 	sys_slist_init(&att->chans);
 
+#if defined(CONFIG_BT_EATT)
+	k_work_init_delayable(&att->connection_work, att_enhanced_connection_work_handler);
+#endif /* CONFIG_BT_EATT */
+
 	chan = att_chan_new(att, 0);
 	if (!chan) {
 		return -ENOMEM;
@@ -2948,6 +2976,32 @@ static int bt_att_accept(struct bt_conn *conn, struct bt_l2cap_chan **ch)
 BT_L2CAP_CHANNEL_DEFINE(att_fixed_chan, BT_L2CAP_CID_ATT, bt_att_accept, NULL);
 
 #if defined(CONFIG_BT_EATT)
+int att_schedule_eatt_connect(struct bt_conn *conn)
+{
+	struct bt_att *att = att_get(conn);
+
+	if (conn->role == BT_CONN_ROLE_PERIPHERAL) {
+		return k_work_schedule(&att->connection_work,
+				       K_MSEC(100)); /* TODO: Calculate correct delay */
+	} else {
+		return k_work_schedule(&att->connection_work, K_NO_WAIT);
+	}
+}
+
+void ecred_connect_cb(struct bt_conn *conn, uint16_t result)
+{
+	static uint16_t previous_result = 0;
+
+	if (result == previous_result && result == BT_L2CAP_BR_ERR_NO_RESOURCES) {
+		BT_DBG("Credit based connection request collision detected");
+		(void)att_schedule_eatt_connect(conn);
+		previous_result = 0; /* Reset to not keep retrying on repeated failures */
+
+		return;
+	}
+	previous_result = result;
+}
+
 int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 {
 	struct bt_att_chan *att_chan = att_get_fixed_chan(conn);
@@ -3054,6 +3108,11 @@ static void bt_eatt_init(void)
 	if (err < 0) {
 		BT_ERR("EATT Server registration failed %d", err);
 	}
+
+	register_l2cap_callbacks((struct bt_l2cap_cb){
+		.ecred_channels_connect_rsp = ecred_connect_cb,
+		.ecred_channels_connect_req = ecred_connect_cb,
+	});
 }
 
 void bt_att_init(void)
