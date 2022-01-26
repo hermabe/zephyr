@@ -1219,8 +1219,17 @@ static void tx_complete_work(struct k_work *work)
 
 void bt_conn_connected(struct bt_conn *conn)
 {
+	int err;
+
 	bt_l2cap_connected(conn);
 	notify_connected(conn);
+	if (IS_ENABLED(CONFIG_BT_EATT_AUTO_CONNECT)) {
+		err = att_schedule_eatt_connect(conn);
+		if (err < 0) {
+			BT_WARN("Automatic creation of EATT bearers failed on connection %p with error %d",
+				conn, err);
+		}
+	}
 }
 
 static int conn_disconnect(struct bt_conn *conn, uint8_t reason)

@@ -3006,8 +3006,9 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 {
 	struct bt_att_chan *att_chan = att_get_fixed_chan(conn);
 	struct bt_att *att = att_chan->att;
-	struct bt_l2cap_chan *chan[CONFIG_BT_EATT_MAX] = {};
+	struct bt_l2cap_chan *chan[CONFIG_BT_EATT_MAX + 1] = {};
 	int i = 0;
+	int err;
 
 	if (num_channels > CONFIG_BT_EATT_MAX) {
 		return -EINVAL;
@@ -3027,7 +3028,16 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 		return -ENOMEM;
 	}
 
-	return bt_l2cap_ecred_chan_connect(conn, chan, BT_EATT_PSM);
+	int created = 0;
+	while (created < i) {
+		err = bt_l2cap_ecred_chan_connect(conn, chan + created, BT_EATT_PSM);
+		if (err < 0) {
+			return err;
+		}
+		created += 5;
+	}
+
+	return 0;
 }
 
 int bt_eatt_disconnect(struct bt_conn *conn)
