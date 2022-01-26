@@ -82,7 +82,13 @@ struct bt_l2cap {
 	struct bt_l2cap_le_chan	chan;
 };
 
+static struct bt_l2cap_cb *l2cap_callbacks;
 static struct bt_l2cap bt_l2cap_pool[CONFIG_BT_MAX_CONN];
+
+void register_l2cap_callbacks(struct bt_l2cap_cb *cb)
+{
+	l2cap_callbacks = cb;
+}
 
 static uint8_t get_ident(void)
 {
@@ -1161,6 +1167,7 @@ static void le_ecred_conn_req(struct bt_l2cap *l2cap, uint8_t ident,
 	uint16_t scid, dcid[L2CAP_ECRED_CHAN_MAX];
 	int i = 0;
 	uint8_t req_cid_count;
+	uint8_t succeeded = 0;
 
 	/* set dcid to zeros here, in case of all connections refused error */
 	memset(dcid, 0, sizeof(dcid));
@@ -1220,6 +1227,7 @@ static void le_ecred_conn_req(struct bt_l2cap *l2cap, uint8_t ident,
 		case BT_L2CAP_LE_SUCCESS:
 			ch = BT_L2CAP_LE_CHAN(chan[i]);
 			dcid[i++] = sys_cpu_to_le16(ch->rx.cid);
+			succeeded++;
 			continue;
 		/* Some connections refused – invalid Source CID */
 		/* Some connections refused – Source CID already allocated */
@@ -1240,7 +1248,7 @@ response:
 				      sizeof(*rsp) +
 				      (sizeof(scid) * req_cid_count));
 	if (!buf) {
-		return;
+		goto callback;
 	}
 
 	rsp = net_buf_add(buf, sizeof(*rsp));
@@ -1255,6 +1263,11 @@ response:
 	net_buf_add_mem(buf, dcid, sizeof(scid) * req_cid_count);
 
 	l2cap_send(conn, BT_L2CAP_CID_LE_SIG, buf);
+
+callback:
+	if (l2cap_callbacks && l2cap_callbacks->ecred_channels_connect_req) {
+		l2cap_callbacks->ecred_channels_connect_req(conn, result, req_cid_count, succeeded);
+	}
 }
 
 static void le_ecred_reconf_req(struct bt_l2cap *l2cap, uint8_t ident,
@@ -1499,6 +1512,8 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 	struct bt_l2cap_le_chan *chan;
 	struct bt_l2cap_ecred_conn_rsp *rsp;
 	uint16_t dcid, mtu, mps, credits, result;
+	uint8_t attempted = 0;
+	uint8_t succeded = 0;
 
 	if (buf->len < sizeof(*rsp)) {
 		BT_ERR("Too small ecred conn rsp packet size");
@@ -1543,6 +1558,7 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 			k_work_cancel_delayable(&chan->chan.rtx_work);
 
 			dcid = net_buf_pull_le16(buf);
+			attempted++;
 
 			BT_DBG("dcid 0x%04x", dcid);
 
@@ -1588,6 +1604,8 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 			/* Give credits */
 			l2cap_chan_tx_give_credits(chan, credits);
 			l2cap_chan_rx_give_credits(chan, chan->rx.init_credits);
+
+			succeded++;
 		}
 		break;
 	case BT_L2CAP_LE_ERR_PSM_NOT_SUPP:
@@ -1596,6 +1614,10 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 			bt_l2cap_chan_del(&chan->chan);
 		}
 		break;
+	}
+
+	if (l2cap_callbacks && l2cap_callbacks->ecred_channels_connect_rsp) {
+		l2cap_callbacks->ecred_channels_connect_rsp(conn, result, attempted, succeded);
 	}
 }
 #endif /* CONFIG_BT_L2CAP_ECRED */
