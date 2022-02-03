@@ -21,9 +21,6 @@ mkdir -p ${WORK_DIR}
 source ${ZEPHYR_BASE}/tests/bluetooth/bsim_bt/compile.source
 
 app=tests/bluetooth/bsim_bt/bsim_test_host conf_file=prj_eatt.conf compile
-
-
-: <<'END'
 app=tests/bluetooth/bsim_bt/bsim_test_app conf_file=prj_split.conf \
   compile
 app=tests/bluetooth/bsim_bt/bsim_test_app conf_file=prj_split_privacy.conf \
@@ -50,4 +47,3 @@ app=tests/bluetooth/bsim_bt/edtt_ble_test_app/gatt_test_app \
 app=tests/bluetooth/bsim_bt/bsim_test_mesh compile
 app=tests/bluetooth/bsim_bt/bsim_test_mesh conf_file=prj_low_lat.conf compile
 app=tests/bluetooth/bsim_bt/bsim_test_mesh conf_file=prj_pst.conf compile
-END

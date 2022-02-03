@@ -443,6 +443,7 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	return chan_send(chan, buf, cb);
 }
 
+// static void att_send_process(struct bt_att *att, enum bt_att_bearer_option bearer_option)
 static void att_send_process(struct bt_att *att)
 {
 	struct bt_att_chan *chan, *tmp;
