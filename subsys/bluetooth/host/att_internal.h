@@ -292,7 +292,7 @@ void bt_att_req_free(struct bt_att_req *req);
 
 /* Send ATT PDU over a connection */
 int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
-		void *user_data);
+		void *user_data, enum bt_att_bearer_option bearer_option);
 
 /* Send ATT Request over a connection */
 int bt_att_req_send(struct bt_conn *conn, struct bt_att_req *req);

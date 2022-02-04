@@ -211,6 +211,7 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 
 static int process_queue(struct bt_att_chan *chan, struct k_fifo *queue)
 {
+	/* TODO: bearer_option */
 	struct net_buf *buf;
 	int err;
 
@@ -258,6 +259,21 @@ static int chan_req_send(struct bt_att_chan *chan, struct bt_att_req *req)
 	return err;
 }
 
+static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
+					   enum bt_att_bearer_option bearer_option)
+{
+	switch (bearer_option) {
+	case BT_ATT_BEARER_UNENHANCED:
+		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ENHANCED:
+		return atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ANY:
+		return true;
+	}
+	BT_ERR("Unknown bearer option: %d", bearer_option);
+	CODE_UNREACHABLE;
+}
+
 static void bt_att_sent(struct bt_l2cap_chan *ch)
 {
 	struct bt_att_chan *chan = ATT_CHAN(ch);
@@ -284,8 +300,10 @@ static void bt_att_sent(struct bt_l2cap_chan *ch)
 	 */
 	if (!chan->req && !sys_slist_is_empty(&att->reqs)) {
 		sys_snode_t *node = sys_slist_get(&att->reqs);
+		struct bt_att_req *req = ATT_REQ(node);
 
-		if (chan_req_send(chan, ATT_REQ(node)) >= 0) {
+		if (att_chan_matches_bearer_option(chan, req->bearer_option) &&
+		    chan_req_send(chan, req) >= 0) {
 			return;
 		}
 
@@ -443,8 +461,7 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	return chan_send(chan, buf, cb);
 }
 
-// static void att_send_process(struct bt_att *att, enum bt_att_bearer_option bearer_option)
-static void att_send_process(struct bt_att *att)
+static void att_send_process(struct bt_att *att, enum bt_att_bearer_option bearer_option)
 {
 	struct bt_att_chan *chan, *tmp;
 	struct net_buf *buf;
@@ -456,6 +473,10 @@ static void att_send_process(struct bt_att *att)
 	}
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
+		if (!att_chan_matches_bearer_option(chan, bearer_option)) {
+			continue;
+		}
+
 		err = bt_att_chan_send(chan, buf, NULL);
 		if (err >= 0) {
 			break;
@@ -570,21 +591,6 @@ static int bt_att_chan_req_send(struct bt_att_chan *chan,
 	BT_DBG("req %p", req);
 
 	return chan_req_send(chan, req);
-}
-
-static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
-					   enum bt_att_bearer_option bearer_option)
-{
-	switch (bearer_option) {
-	case BT_ATT_BEARER_UNENHANCED:
-		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
-	case BT_ATT_BEARER_ENHANCED:
-		return atomic_test_bit(chan->flags, ATT_ENHANCED);
-	case BT_ATT_BEARER_ANY:
-		return true;
-	}
-	BT_ERR("Unknown bearer option: %d", bearer_option);
-	CODE_UNREACHABLE;
 }
 
 static void att_req_send_process(struct bt_att *att)
@@ -2868,6 +2874,7 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 static void bt_att_status(struct bt_l2cap_chan *ch, atomic_t *status)
 {
 	struct bt_att_chan *chan = ATT_CHAN(ch);
+	struct bt_att_req *req;
 	sys_snode_t *node;
 
 	BT_DBG("chan %p status %p", ch, status);
@@ -2892,7 +2899,9 @@ static void bt_att_status(struct bt_l2cap_chan *ch, atomic_t *status)
 		return;
 	}
 
-	if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
+	req = ATT_REQ(node);
+	if (att_chan_matches_bearer_option(chan, req->bearer_option) &&
+	    bt_att_chan_req_send(chan, req) >= 0) {
 		return;
 	}
 
@@ -3178,7 +3187,7 @@ void bt_att_req_free(struct bt_att_req *req)
 }
 
 int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
-		void *user_data)
+		void *user_data, enum bt_att_bearer_option bearer_option)
 {
 	struct bt_att *att;
 
@@ -3200,7 +3209,7 @@ int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
 	}
 
 	net_buf_put(&att->tx_queue, buf);
-	att_send_process(att);
+	att_send_process(att, bearer_option);
 
 	return 0;
 }

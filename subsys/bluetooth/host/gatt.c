@@ -1895,6 +1895,7 @@ struct notify_data {
 struct nfy_mult_data {
 	bt_gatt_complete_func_t func;
 	void *user_data;
+	enum bt_att_bearer_option bearer_option;
 };
 
 #define nfy_mult_user_data(buf) \
@@ -1910,7 +1911,8 @@ static int gatt_notify_mult_send(struct bt_conn *conn, struct net_buf **buf)
 	struct nfy_mult_data *data = nfy_mult_user_data(*buf);
 	int ret;
 
-	ret = bt_att_send(conn, *buf, data->func, data->user_data);
+	/* TODO: Pass correct bearer option */
+	ret = bt_att_send(conn, *buf, data->func, data->user_data, data->bearer_option);
 	if (ret < 0) {
 		net_buf_unref(*buf);
 	}
@@ -1979,6 +1981,7 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
 		/* Set user_data so it can be restored when sending */
 		nfy_mult_user_data(*buf)->func = params->func;
 		nfy_mult_user_data(*buf)->user_data = params->user_data;
+		nfy_mult_user_data(*buf)->bearer_option = params->bearer_option;
 	}
 
 	BT_DBG("handle 0x%04x len %u", handle, params->len);
@@ -2041,7 +2044,11 @@ static int gatt_notify(struct bt_conn *conn, uint16_t handle,
 	net_buf_add(buf, params->len);
 	memcpy(nfy->value, params->data, params->len);
 
-	return bt_att_send(conn, buf, params->func, params->user_data);
+#if defined(CONFIG_BT_EATT)
+	return bt_att_send(conn, buf, params->func, params->user_data, params->bearer_option);
+#else
+	return bt_att_send(conn, buf, params->func, params->user_data, BT_ATT_BEARER_UNENHANCED);
+#endif /* CONFIG_BT_EATT */
 }
 
 static void gatt_indicate_rsp(struct bt_conn *conn, uint8_t err,
@@ -4238,7 +4245,7 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 
 	BT_DBG("handle 0x%04x length %u", handle, length);
 
-	return bt_att_send(conn, buf, func, user_data);
+	return bt_att_send(conn, buf, func, user_data, BT_ATT_BEARER_ANY);
 }
 
 static int gatt_exec_encode(struct net_buf *buf, size_t len, void *user_data)
