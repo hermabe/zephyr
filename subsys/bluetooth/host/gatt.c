@@ -5,7 +5,6 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
 #include <zephyr.h>
 #include <string.h>
 #include <errno.h>
@@ -532,6 +531,8 @@ static ssize_t cf_read(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 		memcpy(data, cfg->data, sizeof(data));
 	}
 
+	BT_INFO("Client features read: %X", data[0]);
+
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, data,
 				 sizeof(data));
 }
@@ -861,6 +862,7 @@ static ssize_t sf_read(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 		       void *buf, uint16_t len, uint16_t offset)
 {
 	uint8_t value = BIT(SF_BIT_EATT);
+	BT_INFO("Server features read: %d\n", value);
 
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, &value,
 				 sizeof(value));
@@ -1911,7 +1913,6 @@ static int gatt_notify_mult_send(struct bt_conn *conn, struct net_buf **buf)
 	struct nfy_mult_data *data = nfy_mult_user_data(*buf);
 	int ret;
 
-	/* TODO: Pass correct bearer option */
 	ret = bt_att_send(conn, *buf, data->func, data->user_data, data->bearer_option);
 	if (ret < 0) {
 		net_buf_unref(*buf);
@@ -4144,7 +4145,7 @@ static int gatt_read_mult_vl(struct bt_conn *conn,
 {
 	return -ENOTSUP;
 }
-#endif
+#endif /* !defined(CONFIG_BT_GATT_READ_MULTIPLE) || !defined(CONFIG_BT_EATT) */
 
 static int gatt_read_encode(struct net_buf *buf, size_t len, void *user_data)
 {
@@ -4245,6 +4246,7 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 
 	BT_DBG("handle 0x%04x length %u", handle, length);
 
+	/* TODO: bearer_option */
 	return bt_att_send(conn, buf, func, user_data, BT_ATT_BEARER_ANY);
 }
 

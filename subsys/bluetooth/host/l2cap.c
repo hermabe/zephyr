@@ -1186,7 +1186,7 @@ static void le_ecred_conn_req(struct bt_l2cap *l2cap, uint8_t ident,
 	mps = sys_le16_to_cpu(req->mps);
 	credits = sys_le16_to_cpu(req->credits);
 
-	BT_DBG("psm 0x%02x mtu %u mps %u credits %u", psm, mtu, mps, credits);
+	BT_INFO("psm 0x%02x mtu %u mps %u credits %u", psm, mtu, mps, credits);
 
 	if (mtu < L2CAP_ECRED_MIN_MTU || mps < L2CAP_ECRED_MIN_MTU) {
 		BT_ERR("Invalid ecred conn req params");
@@ -2033,8 +2033,7 @@ static int l2cap_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	hdr = net_buf_pull_mem(buf, sizeof(*hdr));
 	len = sys_le16_to_cpu(hdr->len);
 
-	BT_DBG("Signaling code 0x%02x ident %u len %u", hdr->code,
-	       hdr->ident, len);
+	BT_INFO("Signaling code 0x%02x ident %u len %u", hdr->code, hdr->ident, len);
 
 	if (buf->len != len) {
 		BT_ERR("L2CAP length mismatch (%u != %u)", buf->len, len);

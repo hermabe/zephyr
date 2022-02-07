@@ -146,6 +146,8 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	struct net_buf_simple_state state;
 	int err;
 
+	BT_INFO("Sending on channel %p, enhanced: %d", chan, atomic_test_bit(chan->flags, ATT_ENHANCED));
+
 	hdr = (void *)buf->data;
 
 	BT_DBG("code 0x%02x", hdr->code);
@@ -209,25 +211,46 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	return err;
 }
 
+
+static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
+					   enum bt_att_bearer_option bearer_option)
+{
+	switch (bearer_option) {
+	case BT_ATT_BEARER_UNENHANCED:
+		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ENHANCED:
+		return atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_BEARER_ANY:
+		return true;
+	}
+	BT_ERR("Unknown bearer option: %d", bearer_option);
+	CODE_UNREACHABLE;
+}
+
 static int process_queue(struct bt_att_chan *chan, struct k_fifo *queue)
 {
-	/* TODO: bearer_option */
+	enum bt_att_bearer_option bearer_option;
 	struct net_buf *buf;
 	int err;
 
 	buf = net_buf_get(queue, K_NO_WAIT);
-	if (buf) {
-		err = chan_send(chan, buf, NULL);
-		if (err) {
-			/* Push it back if it could not be send */
-			k_queue_prepend(&queue->_queue, buf);
-			return err;
-		}
-
-		return 0;
+	if (!buf) {
+		return -ENOENT;
 	}
 
-	return -ENOENT;
+	bearer_option = *(enum bt_att_bearer_option *)net_buf_user_data(buf);
+	if (!att_chan_matches_bearer_option(chan, bearer_option)) {
+		return -ENOENT;
+	}
+
+	err = chan_send(chan, buf, NULL);
+	if (err) {
+		/* Push it back if it could not be send */
+		k_queue_prepend(&queue->_queue, buf);
+		return err;
+	}
+
+	return 0;
 }
 
 /* Send requests without taking tx_sem */
@@ -257,21 +280,6 @@ static int chan_req_send(struct bt_att_chan *chan, struct bt_att_req *req)
 	}
 
 	return err;
-}
-
-static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
-					   enum bt_att_bearer_option bearer_option)
-{
-	switch (bearer_option) {
-	case BT_ATT_BEARER_UNENHANCED:
-		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
-	case BT_ATT_BEARER_ENHANCED:
-		return atomic_test_bit(chan->flags, ATT_ENHANCED);
-	case BT_ATT_BEARER_ANY:
-		return true;
-	}
-	BT_ERR("Unknown bearer option: %d", bearer_option);
-	CODE_UNREACHABLE;
 }
 
 static void bt_att_sent(struct bt_l2cap_chan *ch)
@@ -1063,6 +1071,9 @@ static ssize_t att_chan_read(struct bt_att_chan *chan,
 	struct net_buf *frag;
 	size_t len, total = 0;
 
+	char str[BT_UUID_STR_LEN];
+	bt_uuid_to_str(attr->uuid, str, sizeof(str));
+
 	if (chan->chan.tx.mtu <= net_buf_frags_len(buf)) {
 		return 0;
 	}
@@ -1328,11 +1339,6 @@ static uint8_t att_read_req(struct bt_att_chan *chan, struct net_buf *buf)
 {
 	struct bt_att_read_req *req;
 	uint16_t handle;
-
-	/* TODO: Remove this */
-	if (IS_ENABLED(CONFIG_BT_EATT)) {
-		BT_INFO("Received on enhanced bearer? %d", atomic_test_bit(chan->flags, ATT_ENHANCED));
-	}
 
 	req = (void *)buf->data;
 
@@ -2541,8 +2547,8 @@ static int bt_att_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	}
 
 	hdr = net_buf_pull_mem(buf, sizeof(*hdr));
-	BT_DBG("Received ATT chan %p code 0x%02x len %zu", att_chan, hdr->code,
-	       net_buf_frags_len(buf));
+	BT_INFO("Received ATT chan %p code 0x%02x len %zu, enhanced: %d", att_chan, hdr->code,
+	       net_buf_frags_len(buf), atomic_test_bit(att_chan->flags, ATT_ENHANCED));
 
 	if (!att_chan->att) {
 		BT_DBG("Ignore recv on detached ATT chan");
@@ -2956,6 +2962,8 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 	atomic_set(chan->flags, flags);
 	chan->att = att;
 
+	BT_INFO("New ATT channel: %p, enhanced: %d", chan, atomic_test_bit(chan->flags, ATT_ENHANCED));
+
 	return chan;
 }
 
@@ -3199,6 +3207,8 @@ int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
 		net_buf_unref(buf);
 		return -ENOTCONN;
 	}
+
+	*(enum bt_att_bearer_option *)net_buf_user_data(buf) = bearer_option;
 
 	/* If callback is set use the fixed channel since bt_l2cap_chan_send
 	 * cannot be used with a custom user_data.

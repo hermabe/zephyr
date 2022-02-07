@@ -1055,6 +1055,10 @@ static inline int bt_gatt_notify(struct bt_conn *conn,
 	params.attr = attr;
 	params.data = data;
 	params.len = len;
+#ifdef CONFIG_BT_EATT
+	/* For debug */
+	params.bearer_option = BT_ATT_BEARER_ENHANCED;
+#endif /* CONFIG_BT_EATT */
 
 	return bt_gatt_notify_cb(conn, &params);
 }
