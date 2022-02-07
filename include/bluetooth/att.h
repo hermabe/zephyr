@@ -59,10 +59,23 @@ extern "C" {
 #if defined(CONFIG_BT_TESTING)
 
 int bt_eatt_disconnect_one(struct bt_conn *conn);
-int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 size_t bt_eatt_count(struct bt_conn *conn);
 
 #endif /* CONFIG_BT_TESTING */
+
+/** @brief Connect Enhanced ATT channels
+ *
+ * Sends a series of Credit Based Connection Requests to connect @p num_channels
+ * Enhanced ATT channels. The peer may have limited resources and fewer channels
+ * may be created.
+ *
+ * @param conn The connection to send the request on
+ * @param num_channels The number of Enhanced ATT beaeres to request.
+ *
+ * @return 0 in case of success or negative value in case of error.
+ */
+int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
+
 #endif /* CONFIG_BT_EATT */
 
 #ifdef __cplusplus
