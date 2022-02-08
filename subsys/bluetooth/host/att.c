@@ -225,24 +225,45 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	return err;
 }
 
+static bool att_chan_matches_bearer_option(struct bt_att_chan *chan,
+					   enum bt_att_chan_option chan_option)
+{
+	switch (chan_option) {
+	case BT_ATT_CHAN_UNENHANCED:
+		return !atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_CHAN_ENHANCED:
+		return atomic_test_bit(chan->flags, ATT_ENHANCED);
+	case BT_ATT_CHAN_ANY:
+		return true;
+	}
+	BT_ERR("Unknown bearer option: %d", chan_option);
+	CODE_UNREACHABLE;
+}
+
 static int process_queue(struct bt_att_chan *chan, struct k_fifo *queue)
 {
+	enum bt_att_chan_option chan_option;
 	struct net_buf *buf;
 	int err;
 
 	buf = net_buf_get(queue, K_NO_WAIT);
-	if (buf) {
-		err = chan_send(chan, buf, NULL);
-		if (err) {
-			/* Push it back if it could not be send */
-			k_queue_prepend(&queue->_queue, buf);
-			return err;
-		}
-
-		return 0;
+	if (!buf) {
+		return -ENOENT;
 	}
 
-	return -ENOENT;
+	chan_option = *(enum bt_att_chan_option *)net_buf_user_data(buf);
+	if (!att_chan_matches_bearer_option(chan, chan_option)) {
+		return -ENOENT;
+	}
+
+	err = chan_send(chan, buf, NULL);
+	if (err) {
+		/* Push it back if it could not be send */
+		k_queue_prepend(&queue->_queue, buf);
+		return err;
+	}
+
+	return 0;
 }
 
 /* Send requests without taking tx_sem */
@@ -300,8 +321,10 @@ static void bt_att_sent(struct bt_l2cap_chan *ch)
 	 */
 	if (!chan->req && !sys_slist_is_empty(&att->reqs)) {
 		sys_snode_t *node = sys_slist_get(&att->reqs);
+		struct bt_att_req *req = ATT_REQ(node);
 
-		if (chan_req_send(chan, ATT_REQ(node)) >= 0) {
+		if (att_chan_matches_bearer_option(chan, req->chan_option) &&
+		    chan_req_send(chan, req) >= 0) {
 			return;
 		}
 
@@ -453,7 +476,7 @@ static int bt_att_chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	return chan_send(chan, buf, cb);
 }
 
-static void att_send_process(struct bt_att *att)
+static void att_send_process(struct bt_att *att, enum bt_att_chan_option chan_option)
 {
 	struct bt_att_chan *chan, *tmp;
 	struct net_buf *buf;
@@ -465,6 +488,10 @@ static void att_send_process(struct bt_att *att)
 	}
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
+		if (!att_chan_matches_bearer_option(chan, chan_option)) {
+			continue;
+		}
+
 		err = bt_att_chan_send(chan, buf, NULL);
 		if (err >= 0) {
 			break;
@@ -597,6 +624,10 @@ static void att_req_send_process(struct bt_att *att)
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&att->chans, chan, tmp, node) {
 		/* If there is nothing pending use the channel */
 		if (!chan->req) {
+			if (!att_chan_matches_bearer_option(chan, ATT_REQ(node)->chan_option)) {
+				continue;
+			}
+
 			if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
 				return;
 			}
@@ -2848,6 +2879,7 @@ static void bt_att_encrypt_change(struct bt_l2cap_chan *chan,
 static void bt_att_status(struct bt_l2cap_chan *ch, atomic_t *status)
 {
 	struct bt_att_chan *chan = ATT_CHAN(ch);
+	struct bt_att_req *req;
 	sys_snode_t *node;
 
 	BT_DBG("chan %p status %p", ch, status);
@@ -2872,7 +2904,9 @@ static void bt_att_status(struct bt_l2cap_chan *ch, atomic_t *status)
 		return;
 	}
 
-	if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
+	req = ATT_REQ(node);
+	if (att_chan_matches_bearer_option(chan, req->chan_option) &&
+	    bt_att_chan_req_send(chan, req) >= 0) {
 		return;
 	}
 
@@ -3266,8 +3300,8 @@ void bt_att_req_free(struct bt_att_req *req)
 	k_mem_slab_free(&req_slab, (void **)&req);
 }
 
-int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
-		void *user_data)
+int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb, void *user_data,
+		enum bt_att_chan_option chan_option)
 {
 	struct bt_att *att;
 
@@ -3280,6 +3314,8 @@ int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
 		return -ENOTCONN;
 	}
 
+	*(enum bt_att_chan_option *)net_buf_user_data(buf) = chan_option;
+
 	/* If callback is set use the fixed channel since bt_l2cap_chan_send
 	 * cannot be used with a custom user_data.
 	 */
@@ -3289,7 +3325,7 @@ int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
 	}
 
 	net_buf_put(&att->tx_queue, buf);
-	att_send_process(att);
+	att_send_process(att, chan_option);
 
 	return 0;
 }

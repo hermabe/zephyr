@@ -274,6 +274,7 @@ struct bt_att_req {
 	size_t len;
 #endif /* CONFIG_BT_SMP */
 	void *user_data;
+	enum bt_att_chan_option chan_option;
 };
 
 void att_sent(struct bt_conn *conn, void *user_data);
@@ -290,8 +291,8 @@ struct bt_att_req *bt_att_req_alloc(k_timeout_t timeout);
 void bt_att_req_free(struct bt_att_req *req);
 
 /* Send ATT PDU over a connection */
-int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb,
-		void *user_data);
+int bt_att_send(struct bt_conn *conn, struct net_buf *buf, bt_conn_tx_cb_t cb, void *user_data,
+		enum bt_att_chan_option chan_option);
 
 /* Send ATT Request over a connection */
 int bt_att_req_send(struct bt_conn *conn, struct bt_att_req *req);
@@ -311,3 +312,10 @@ int bt_eatt_disconnect(struct bt_conn *conn);
  *  @return The found request. NULL if not found.
  */
 struct bt_att_req *bt_att_find_req_by_user_data(struct bt_conn *conn, const void *user_data);
+
+
+#if defined(CONFIG_BT_EATT)
+#define BT_ATT_CHAN_OPTION(params) (params)->chan_option
+#else
+#define BT_ATT_CHAN_OPTION(params) BT_ATT_CHAN_UNENHANCED
+#endif /* CONFIG_BT_EATT */

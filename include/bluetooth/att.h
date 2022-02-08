@@ -65,6 +65,12 @@ size_t bt_eatt_count(struct bt_conn *conn);
 #endif /* CONFIG_BT_TESTING */
 #endif /* CONFIG_BT_EATT */
 
+enum bt_att_chan_option {
+	BT_ATT_CHAN_UNENHANCED,
+	BT_ATT_CHAN_ENHANCED,
+	BT_ATT_CHAN_ANY,
+};
+
 #ifdef __cplusplus
 }
 #endif
