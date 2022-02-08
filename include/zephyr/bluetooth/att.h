@@ -94,6 +94,31 @@ size_t bt_eatt_count(struct bt_conn *conn);
 
 #endif /* CONFIG_BT_EATT */
 
+/* EATT channel information */
+struct bt_eatt_chan_info {
+	/* The connection the EATT channel belongs to */
+	struct bt_conn *conn;
+	struct bt_l2cap_le_endpoint *tx;
+};
+
+/** @brief EATT callback structure. */
+struct bt_eatt_cb {
+	/** @brief An EATT channel has been connected. */
+	void (*chan_connected)(const struct bt_eatt_chan_info *info);
+	/** @brief An EATT channel has been disconnected. */
+	void (*chan_disconnected)(const struct bt_eatt_chan_info *info);
+
+	sys_snode_t node;
+};
+
+/** @brief Register EATT callbacks.
+ *
+ *  Register callbacks to monitor the state of EATT.
+ *
+ *  @param cb Callback struct.
+ */
+void bt_eatt_cb_register(struct bt_eatt_cb *cb);
+
 #ifdef __cplusplus
 }
 #endif
