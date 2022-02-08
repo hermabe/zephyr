@@ -123,6 +123,8 @@ static bt_att_chan_sent_t chan_cb(struct net_buf *buf);
 static bt_conn_tx_cb_t att_cb(bt_att_chan_sent_t cb);
 
 static void att_chan_mtu_updated(struct bt_att_chan *updated_chan);
+static void att_chan_connected(struct bt_att_chan *att_chan);
+static void att_chan_disconnected(struct bt_att_chan *att_chan);
 static void bt_att_disconnected(struct bt_l2cap_chan *chan);
 
 void att_sent(struct bt_conn *conn, void *user_data)
@@ -134,6 +136,13 @@ void att_sent(struct bt_conn *conn, void *user_data)
 	if (chan->ops->sent) {
 		chan->ops->sent(chan);
 	}
+}
+
+static sys_slist_t callback_list;
+
+void bt_att_cb_register(struct bt_att_cb *cb)
+{
+	sys_slist_append(&callback_list, &cb->node);
 }
 
 /* In case of success the ownership of the buffer is transferred to the stack
@@ -2735,6 +2744,7 @@ static void bt_att_connected(struct bt_l2cap_chan *chan)
 	}
 
 	att_chan_mtu_updated(att_chan);
+	att_chan_connected(att_chan);
 
 	k_work_init_delayable(&att_chan->timeout_work, att_timeout);
 }
@@ -2751,6 +2761,8 @@ static void bt_att_disconnected(struct bt_l2cap_chan *chan)
 		BT_DBG("Ignore disconnect on detached ATT chan");
 		return;
 	}
+
+	att_chan_disconnected(att_chan);
 
 	att_chan_detach(att_chan);
 
@@ -3189,6 +3201,8 @@ void bt_att_init(void)
 {
 	bt_gatt_init();
 
+	sys_slist_init(&callback_list);
+
 	if (IS_ENABLED(CONFIG_BT_EATT)) {
 		bt_eatt_init();
 	}
@@ -3235,6 +3249,29 @@ static void att_chan_mtu_updated(struct bt_att_chan *updated_chan)
 		max_tx = MAX(max_tx, updated_chan->chan.tx.mtu);
 		max_rx = MAX(max_rx, updated_chan->chan.rx.mtu);
 		bt_gatt_att_max_mtu_changed(att->conn, max_tx, max_rx);
+	}
+}
+
+static void att_chan_connected(struct bt_att_chan *att_chan)
+{
+	struct bt_att_cb *cb;
+
+	SYS_SLIST_FOR_EACH_CONTAINER (&callback_list, cb, node) {
+		if (cb->att_chan_connected) {
+			cb->att_chan_connected(att_chan->att->conn, att_chan->chan.tx.cid,
+					       att_chan->chan.tx.mtu, att_chan->chan.tx.mps);
+		}
+	}
+}
+
+static void att_chan_disconnected(struct bt_att_chan *att_chan)
+{
+	struct bt_att_cb *cb;
+
+	SYS_SLIST_FOR_EACH_CONTAINER (&callback_list, cb, node) {
+		if (cb->att_chan_disconnected) {
+			cb->att_chan_disconnected(att_chan->att->conn, att_chan->chan.tx.cid);
+		}
 	}
 }
 

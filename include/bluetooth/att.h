@@ -78,6 +78,37 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 
 #endif /* CONFIG_BT_EATT */
 
+/** @brief ATT callback structure. */
+struct bt_att_cb {
+	/** @brief An ATT channel has been connected.
+	 *
+	 *  @param conn Connection object.
+	 *  @param cid The Channel ID of the connected ATT channel
+	 *  @param mtu The Maximum Transmission Unit of the connected ATT channel
+	 *  @param mps The Maximum PDU payload Size of the connected ATT channel
+	 */
+	void (*att_chan_connected)(struct bt_conn *conn, uint16_t cid, uint16_t mtu, uint16_t mps);
+
+	/** @brief An ATT channel has been disconnected or connection failed.
+	 *
+	 * If connection failed @p cid will be 0x0000.
+	 *
+	 *  @param conn Connection object.
+	 *  @param cid The Channel ID of the connected ATT channel
+	 */
+	void (*att_chan_disconnected)(struct bt_conn *conn, uint16_t cid);
+
+	sys_snode_t node;
+};
+
+/** @brief Register ATT callbacks.
+ *
+ *  Register callbacks to monitor the state of ATT.
+ *
+ *  @param cb Callback struct.
+ */
+void bt_att_cb_register(struct bt_att_cb *cb);
+
 #ifdef __cplusplus
 }
 #endif
