@@ -273,14 +273,14 @@ static void test_tick(bs_time_t HW_device_time)
 
 static const struct bst_test_instance test_def[] = {
 	{
-		.test_id = "peripheral",
+		.test_id = "peripheral_eatt",
 		.test_descr = "Peripheral EATT",
 		.test_post_init_f = test_init,
 		.test_tick_f = test_tick,
 		.test_main_f = test_peripheral_main
 	},
 	{
-		.test_id = "central",
+		.test_id = "central_eatt",
 		.test_descr = "Central EATT",
 		.test_post_init_f = test_init,
 		.test_tick_f = test_tick,
