@@ -25,10 +25,10 @@ BOARD="${BOARD:-nrf52_bsim}"
 cd ${BSIM_OUT_PATH}/bin
 
 Execute ./bs_${BOARD}_tests_bluetooth_bsim_bt_bsim_test_host_prj_eatt_conf \
-  -v=${verbosity_level} -s=${simulation_id} -d=0 -testid=central_eatt
+  -v=${verbosity_level} -s=${simulation_id} -d=0 -testid=central_gatt
 
 Execute ./bs_${BOARD}_tests_bluetooth_bsim_bt_bsim_test_host_prj_eatt_conf \
-  -v=${verbosity_level} -s=${simulation_id} -d=1 -testid=peripheral_eatt
+  -v=${verbosity_level} -s=${simulation_id} -d=1 -testid=peripheral_gatt
 
 Execute ./bs_2G4_phy_v1 -v=${verbosity_level} -s=${simulation_id} \
   -D=2 -sim_length=200e6 $@

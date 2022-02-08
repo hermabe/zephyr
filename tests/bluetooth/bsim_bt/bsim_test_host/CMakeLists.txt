@@ -16,6 +16,7 @@ project(bsim_test_host)
 target_sources(app PRIVATE
   src/main.c
   src/main_eatt.c
+  src/main_gatt.c
 )
 
 
