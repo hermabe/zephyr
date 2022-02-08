@@ -109,6 +109,12 @@ struct bt_att_cb {
  */
 void bt_att_cb_register(struct bt_att_cb *cb);
 
+enum bt_att_chan_option {
+	BT_ATT_CHAN_UNENHANCED,
+	BT_ATT_CHAN_ENHANCED,
+	BT_ATT_CHAN_ANY,
+};
+
 #ifdef __cplusplus
 }
 #endif
