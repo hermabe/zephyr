@@ -1054,6 +1054,10 @@ static inline int bt_gatt_notify(struct bt_conn *conn,
 	params.attr = attr;
 	params.data = data;
 	params.len = len;
+#ifdef CONFIG_BT_EATT
+	/* For debug */
+	params.chan_option = BT_ATT_CHAN_ENHANCED;
+#endif /* CONFIG_BT_EATT */
 
 	return bt_gatt_notify_cb(conn, &params);
 }

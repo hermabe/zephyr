@@ -44,10 +44,31 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	printk("Disconnected (reason 0x%02x)\n", reason);
 }
 
+static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err)
+{
+	printk("Security changed: conn %p, level %d err %d\n", conn, level, err);
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected = connected,
 	.disconnected = disconnected,
+	.security_changed = security_changed,
 };
+
+static void att_chan_connected(struct bt_conn *conn, uint16_t cid, uint16_t mtu, uint16_t mps)
+{
+	printk("ATT channel connected. conn: %p, cid: 0x%04X, mtu: %d. mps: %d\n", conn, cid, mtu,
+	       mps);
+}
+
+static void att_chan_disconnected(struct bt_conn *conn, uint16_t cid)
+{
+	if (cid) {
+		printk("ATT channel with cid 0x%04X disconnected\n", cid);
+	} else {
+		printk("Connection of ATT channel failed\n");
+	}
+}
 
 static void bt_ready(void)
 {
@@ -112,6 +133,13 @@ void main(void)
 		printk("Bluetooth init failed (err %d)\n", err);
 		return;
 	}
+
+	struct bt_att_cb att_cb = {
+		.att_chan_connected = att_chan_connected,
+		.att_chan_disconnected = att_chan_disconnected,
+	};
+
+	bt_att_cb_register(&att_cb);
 
 	bt_ready();
 

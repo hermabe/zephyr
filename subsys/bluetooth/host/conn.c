@@ -1223,12 +1223,14 @@ void bt_conn_connected(struct bt_conn *conn)
 	notify_connected(conn);
 
 #if defined(CONFIG_BT_EATT)
-	if (IS_ENABLED(CONFIG_BT_EATT_AUTO_CONNECT)) {
+	if (IS_ENABLED(CONFIG_BT_EATT_AUTO_CONNECT) && conn->role == BT_CONN_ROLE_CENTRAL) {
 		const int err = att_schedule_eatt_connect(conn, CONFIG_BT_EATT_MAX);
 
 		if (err < 0) {
 			BT_WARN("Automatic creation of EATT bearers failed on connection %p with error %d",
 				conn, err);
+		} else {
+			BT_INFO("Scheduling of EATT connection succeded");
 		}
 	}
 #endif /* CONFIG_BT_EATT */

@@ -142,6 +142,7 @@ static sys_slist_t callback_list;
 
 void bt_att_cb_register(struct bt_att_cb *cb)
 {
+	BT_DBG("");
 	sys_slist_append(&callback_list, &cb->node);
 }
 
@@ -162,6 +163,7 @@ static int chan_send(struct bt_att_chan *chan, struct net_buf *buf,
 	hdr = (void *)buf->data;
 
 	BT_DBG("code 0x%02x", hdr->code);
+	BT_INFO("Sending on enhanced? %d", atomic_test_bit(chan->flags, ATT_ENHANCED));
 
 	if (IS_ENABLED(CONFIG_BT_EATT) && hdr->code == BT_ATT_OP_MTU_REQ &&
 	    chan->chan.tx.cid != BT_L2CAP_CID_ATT) {
@@ -281,11 +283,12 @@ static int chan_req_send(struct bt_att_chan *chan, struct bt_att_req *req)
 	struct net_buf *buf;
 	int err;
 
+	BT_DBG("chan %p mtu %d req %p len %zu", chan, chan->chan.tx.mtu, req, net_buf_frags_len(req->buf));
+
 	if (chan->chan.tx.mtu < net_buf_frags_len(req->buf)) {
 		return -EMSGSIZE;
 	}
 
-	BT_DBG("chan %p req %p len %zu", chan, req, net_buf_frags_len(req->buf));
 
 	chan->req = req;
 
@@ -632,7 +635,9 @@ static void att_req_send_process(struct bt_att *att)
 				continue;
 			}
 
-			if (bt_att_chan_req_send(chan, ATT_REQ(node)) >= 0) {
+			int err = bt_att_chan_req_send(chan, ATT_REQ(node));
+			BT_DBG("bt_att_chan_req_send() returned %d", err);
+			if (err >= 0) {
 				return;
 			}
 		}
@@ -2761,7 +2766,7 @@ static void bt_att_connected(struct bt_l2cap_chan *chan)
 	struct bt_att_chan *att_chan = att_get_fixed_chan(chan->conn);
 	struct bt_l2cap_le_chan *ch = BT_L2CAP_LE_CHAN(chan);
 
-	BT_DBG("chan %p cid 0x%04x", ch, ch->tx.cid);
+	BT_DBG("chan %p cid 0x%04x mtu %d mps %d", ch, ch->tx.cid, ch->tx.mtu, ch->tx.mps);
 
 	att_chan = ATT_CHAN(chan);
 
@@ -2963,6 +2968,7 @@ static struct bt_att_chan *att_chan_new(struct bt_att *att, atomic_val_t flags)
 		BT_WARN("No available ATT channel for conn %p", att->conn);
 		return NULL;
 	}
+	BT_INFO("ATT channel allocated");
 
 	(void)memset(chan, 0, sizeof(*chan));
 	chan->chan.chan.ops = &ops;
@@ -3000,6 +3006,8 @@ static void att_enhanced_connection_work_handler(struct k_work *work)
 
 	if (err < 0) {
 		BT_WARN("Failed to connect EATT channels (err: %d)", err);
+	} else {
+		BT_INFO("bt_eatt_connect succeded");
 	}
 
 }
@@ -3050,6 +3058,7 @@ static k_timeout_t credit_based_connection_delay(struct bt_conn *conn)
 	 */
 
 	if (IS_ENABLED(CONFIG_BT_CENTRAL) && conn->role == BT_CONN_ROLE_CENTRAL) {
+		BT_INFO("Central, not waiting");
 		return K_NO_WAIT;
 
 	} else if (IS_ENABLED(CONFIG_BT_PERIPHERAL)) {
@@ -3065,7 +3074,9 @@ static k_timeout_t credit_based_connection_delay(struct bt_conn *conn)
 		const uint32_t calculated_delay =
 			2 * (conn->le.latency + 1) * BT_CONN_INTERVAL_TO_MS(conn->le.interval);
 
-		return K_MSEC(MAX(100, calculated_delay + rand_delay));
+		const uint32_t delay = MAX(100, calculated_delay + rand_delay);
+		BT_INFO("Peripheral, waiting %d ms", delay);
+		return K_MSEC(delay);
 	}
 
 	/* Must be either central or peripheral */
@@ -3093,6 +3104,8 @@ static void ecred_connect_cb(struct bt_conn *conn, uint16_t result, uint8_t atte
 		err = att_schedule_eatt_connect(conn, attempted_to_connect - succeded_to_connect);
 		if (err < 0) {
 			BT_ERR("Failed to schedule EATT connection retry (err: %d)", err);
+		} else {
+			BT_INFO("Scheduling of EATT connection succeded");
 		}
 
 		/* Reset to not keep retrying on repeated failures */

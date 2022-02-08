@@ -532,6 +532,8 @@ static ssize_t cf_read(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 		memcpy(data, cfg->data, sizeof(data));
 	}
 
+	BT_INFO("cf_read");
+
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, data,
 				 sizeof(data));
 }
@@ -557,7 +559,7 @@ static bool cf_set_value(struct gatt_cf_cfg *cfg, const uint8_t *value, uint16_t
 			cfg->data[i] |= value[i];
 		}
 
-		BT_DBG("byte %u: data 0x%02x value 0x%02x", i, cfg->data[i],
+		BT_INFO("byte %u: data 0x%02x value 0x%02x", i, cfg->data[i],
 		       value[i]);
 	}
 
@@ -588,7 +590,7 @@ static ssize_t cf_write(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 		return BT_GATT_ERR(BT_ATT_ERR_INSUFFICIENT_RESOURCES);
 	}
 
-	BT_DBG("handle 0x%04x len %u", attr->handle, len);
+	BT_INFO("handle 0x%04x len %u", attr->handle, len);
 
 	if (!cf_set_value(cfg, value, len)) {
 		return BT_GATT_ERR(BT_ATT_ERR_VALUE_NOT_ALLOWED);
@@ -1902,9 +1904,10 @@ struct nfy_mult_data {
 
 #define nfy_mult_user_data(buf) \
 	((struct nfy_mult_data *)net_buf_user_data(buf))
-#define nfy_mult_data_match(buf, _func, _user_data) \
-	((nfy_mult_user_data(buf)->func == _func) && \
-	(nfy_mult_user_data(buf)->user_data == _user_data))
+#define nfy_mult_data_match(buf, _func, _user_data, _chan_option)                                  \
+	((nfy_mult_user_data(buf)->func == _func) &&                                               \
+	 (nfy_mult_user_data(buf)->user_data == _user_data) &&                                     \
+	 (nfy_mult_user_data(buf)->chan_option == _chan_option))
 
 static struct net_buf *nfy_mult[CONFIG_BT_MAX_CONN];
 
@@ -1912,6 +1915,7 @@ static int gatt_notify_mult_send(struct bt_conn *conn, struct net_buf **buf)
 {
 	struct nfy_mult_data *data = nfy_mult_user_data(*buf);
 	int ret;
+	BT_INFO("gatt_notify_mult_send");
 
 	ret = bt_att_send(conn, *buf, data->func, data->user_data, data->chan_option);
 	if (ret < 0) {
@@ -1926,6 +1930,8 @@ static int gatt_notify_mult_send(struct bt_conn *conn, struct net_buf **buf)
 static void notify_mult_process(struct k_work *work)
 {
 	int i;
+
+	BT_INFO("notify_mult_process");
 
 	/* Send to any connection with an allocated buffer */
 	for (i = 0; i < ARRAY_SIZE(nfy_mult); i++) {
@@ -1957,6 +1963,7 @@ static bool gatt_cf_notify_multi(struct bt_conn *conn)
 static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
 			    struct bt_gatt_notify_params *params)
 {
+	BT_INFO("gatt_notify_mult");
 	struct net_buf **buf = &nfy_mult[bt_conn_index(conn)];
 	struct bt_att_notify_mult *nfy;
 
@@ -1964,7 +1971,7 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
 	 * the existing buffer and proceed to create a new one
 	 */
 	if (*buf && ((net_buf_tailroom(*buf) < sizeof(*nfy) + params->len) ||
-	    !nfy_mult_data_match(*buf, params->func, params->user_data))) {
+	    !nfy_mult_data_match(*buf, params->func, params->user_data, params->chan_option))) {
 		int ret;
 
 		ret = gatt_notify_mult_send(conn, buf);

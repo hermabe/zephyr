@@ -393,7 +393,7 @@ void do_discover()
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params.type = BT_GATT_DISCOVER_PRIMARY;
-	discover_params.chan_option = BT_ATT_CHAN_ENHANCED;
+	discover_params.chan_option = BT_ATT_CHAN_ANY;
 
 	err = bt_gatt_discover(default_conn, &discover_params);
 	if (err) {
@@ -408,7 +408,7 @@ void do_discover()
 	printk("char_2_attr_handle: %d\n", char_2_attr_handle);
 }
 
-static void do_reads(enum bt_att_chan_option chan_option)
+void do_reads(enum bt_att_chan_option chan_option)
 {
 	int err;
 
@@ -479,12 +479,12 @@ static void test_central_main(void)
 		FAIL("MTU exchange failed (err %d)\n", err);
 	}
 
-	printk("Connecting %d EATT channels\n", N_EATT_CHANNELS);
-	err = bt_eatt_connect(default_conn, N_EATT_CHANNELS);
-	if (err) {
-		FAIL("Failed to connect EATT (err: %d)\n", err);
-	}
-	k_sleep(K_MSEC(100)); /* Wait a while for eatt enabling to finish */
+	// printk("Connecting %d EATT channels\n", N_EATT_CHANNELS);
+	// err = bt_eatt_connect(default_conn, N_EATT_CHANNELS);
+	// if (err) {
+	// 	FAIL("Failed to connect EATT (err: %d)\n", err);
+	// }
+	// k_sleep(K_MSEC(100)); /* Wait a while for eatt enabling to finish */
 
 	/* Wait a bit to ensure that all LLCP have time to finish */
 

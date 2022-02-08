@@ -133,8 +133,10 @@ __l2cap_lookup_ident(struct bt_conn *conn, uint16_t ident, bool remove)
 {
 	struct bt_l2cap_chan *chan;
 	sys_snode_t *prev = NULL;
+	BT_DBG("");
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&conn->channels, chan, node) {
+		BT_DBG("chan %p chan->ident %d", chan, chan->ident);
 		if (chan->ident == ident) {
 			if (remove) {
 				sys_slist_remove(&conn->channels, prev,
@@ -523,6 +525,7 @@ static int l2cap_ecred_conn_req(struct bt_l2cap_chan **chan, int channels)
 		ch = BT_L2CAP_LE_CHAN(chan[i]);
 
 		ch->chan.ident = ident;
+		BT_DBG("ch %p ch->chan %p ident %d", ch, &ch->chan, ident);
 
 		net_buf_add_le16(buf, ch->rx.cid);
 	}
@@ -536,6 +539,8 @@ static int l2cap_ecred_conn_req(struct bt_l2cap_chan **chan, int channels)
 static void l2cap_le_encrypt_change(struct bt_l2cap_chan *chan, uint8_t status)
 {
 	int err;
+
+	BT_DBG("chan %p ident %d status %d", chan, chan->ident, status);
 
 	/* Skip channels that are not pending waiting for encryption */
 	if (!atomic_test_and_clear_bit(chan->status,
@@ -556,9 +561,12 @@ static void l2cap_le_encrypt_change(struct bt_l2cap_chan *chan, uint8_t status)
 
 		SYS_SLIST_FOR_EACH_CONTAINER(&chan->conn->channels, ch, node) {
 			if (chan->ident == ch->ident) {
+				BT_DBG("ch %p", ch);
 				echan[i++] = ch;
 			}
 		}
+
+		BT_DBG("Retrying ecred connection of %d channels", i);
 
 		/* Retry ecred connect */
 		l2cap_ecred_conn_req(echan, i);
@@ -1196,7 +1204,7 @@ static void le_ecred_conn_req(struct bt_l2cap *l2cap, uint8_t ident,
 	mps = sys_le16_to_cpu(req->mps);
 	credits = sys_le16_to_cpu(req->credits);
 
-	BT_DBG("psm 0x%02x mtu %u mps %u credits %u", psm, mtu, mps, credits);
+	BT_INFO("ecred req: psm 0x%02x mtu %u mps %u credits %u", psm, mtu, mps, credits);
 
 	if (mtu < L2CAP_ECRED_MIN_MTU || mps < L2CAP_ECRED_MIN_MTU) {
 		BT_ERR("Invalid ecred conn req params");
@@ -1262,6 +1270,7 @@ response:
 		rsp->credits = sys_cpu_to_le16(ch->rx.init_credits);
 	}
 	rsp->result = sys_cpu_to_le16(result);
+	BT_INFO("Responding with 0x%04X", result);
 
 	net_buf_add_mem(buf, dcid, sizeof(scid) * req_cid_count);
 
@@ -1529,8 +1538,8 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 	credits = sys_le16_to_cpu(rsp->credits);
 	result = sys_le16_to_cpu(rsp->result);
 
-	BT_DBG("mtu 0x%04x mps 0x%04x credits 0x%04x result %u", mtu,
-	       mps, credits, result);
+	BT_INFO("ecred rsp: mtu 0x%04x mps 0x%04x credits 0x%04x result %u ident %d", mtu, mps, credits, result,
+	       ident);
 
 	switch (result) {
 	case BT_L2CAP_LE_ERR_AUTHENTICATION:
@@ -1540,7 +1549,9 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 			k_work_cancel_delayable(&chan->chan.rtx_work);
 
 			/* If security needs changing wait it to be completed */
-			if (!l2cap_change_security(chan, result)) {
+			int err = l2cap_change_security(chan, result);
+			BT_INFO("l2cap_change_security() returned %d", err);
+			if (!err) {
 				return;
 			}
 			bt_l2cap_chan_remove(conn, &chan->chan);
@@ -1576,6 +1587,7 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 
 			c = bt_l2cap_le_lookup_tx_cid(conn, dcid);
 			if (c) {
+				BT_WARN("Channel with CID %d already exists", dcid);
 				/* If a device receives a
 				 * L2CAP_CREDIT_BASED_CONNECTION_RSP packet
 				 * with an already assigned Destination CID,
@@ -1600,6 +1612,7 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 			bt_l2cap_chan_set_state(&chan->chan,
 						BT_L2CAP_CONNECTED);
 
+			BT_DBG("Calling connected callback: %p", (void *)chan->chan.ops->connected);
 			if (chan->chan.ops->connected) {
 				chan->chan.ops->connected(&chan->chan);
 			}
@@ -1610,6 +1623,7 @@ static void le_ecred_conn_rsp(struct bt_l2cap *l2cap, uint8_t ident,
 
 			succeded++;
 		}
+		BT_DBG("No more chans");
 		break;
 	case BT_L2CAP_LE_ERR_PSM_NOT_SUPP:
 	default:

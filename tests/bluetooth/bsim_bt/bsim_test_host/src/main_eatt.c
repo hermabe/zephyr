@@ -114,7 +114,7 @@ static void security_changed(struct bt_conn *conn, bt_security_t level,
 	if (security_err) {
 		FAIL("Security change failed (err: %d)\n", security_err);
 	} else if (level != CONFIG_BT_EATT_SEC_LEVEL) {
-		FAIL("Wrong security level (%d)", level);
+		FAIL("Wrong security level (%d)\n", level);
 	}
 
 	security_done = true;
