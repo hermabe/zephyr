@@ -119,6 +119,12 @@ struct bt_eatt_cb {
  */
 void bt_eatt_cb_register(struct bt_eatt_cb *cb);
 
+enum bt_att_chan_pref {
+	BT_ATT_CHAN_ANY = 0x0,
+	BT_ATT_CHAN_UNENHANCED = BIT(0),
+	BT_ATT_CHAN_ENHANCED = BIT(1),
+};
+
 #ifdef __cplusplus
 }
 #endif
