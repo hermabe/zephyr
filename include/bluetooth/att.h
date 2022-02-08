@@ -78,6 +78,34 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels);
 
 #endif /* CONFIG_BT_EATT */
 
+/* ATT channel information */
+struct bt_att_chan_info {
+	/* The connection the ATT channel belongs to */
+	struct bt_conn *conn;
+	/* The Channel ID of the ATT channel */
+	uint16_t cid;
+	/* The Maximum Transmission Unit of the ATT channel */
+	uint16_t mtu;
+	/* The Maximum PDU payload Size of the ATT channel */
+	uint16_t mps;
+};
+
+/** @brief ATT callback structure. */
+struct bt_eatt_cb {
+	/** @brief An ATT channel has been connected. */
+	void (*eatt_chan_connected)(struct bt_att_chan_info *info);
+
+	sys_snode_t node;
+};
+
+/** @brief Register ATT callbacks.
+ *
+ *  Register callbacks to monitor the state of ATT.
+ *
+ *  @param cb Callback struct.
+ */
+void bt_eatt_cb_register(struct bt_eatt_cb *cb);
+
 #ifdef __cplusplus
 }
 #endif
