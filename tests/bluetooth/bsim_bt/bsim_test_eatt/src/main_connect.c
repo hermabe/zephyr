@@ -121,10 +121,12 @@ static void test_peripheral_main(void)
 		k_sleep(K_MSEC(100));
 	}
 
+#if !defined(CONFIG_BT_EATT_AUTO_CONNECT)
 	err = bt_eatt_connect(default_conn, CONFIG_BT_EATT_MAX);
 	if (err) {
 		FAIL("Sending credit based connection request failed (err %d)\n", err);
 	}
+#endif /* CONFIG_BT_EATT_AUTO_CONNECT */
 
 	while (num_eatt_channels < CONFIG_BT_EATT_MAX) {
 		k_sleep(K_MSEC(10));
@@ -186,10 +188,12 @@ static void test_central_main(void)
 		k_sleep(K_MSEC(100));
 	}
 
+#if !defined(CONFIG_BT_EATT_AUTO_CONNECT)
 	err = bt_eatt_connect(default_conn, CONFIG_BT_EATT_MAX);
 	if (err) {
 		FAIL("Sending credit based connection request failed (err %d)\n", err);
 	}
+#endif /* CONFIG_BT_EATT_AUTO_CONNECT */
 
 	while (num_eatt_channels < CONFIG_BT_EATT_MAX) {
 		k_sleep(K_MSEC(10));
