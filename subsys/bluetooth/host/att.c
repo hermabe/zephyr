@@ -3067,7 +3067,7 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 {
 	struct bt_att_chan *att_chan = att_get_fixed_chan(conn);
 	struct bt_att *att = att_chan->att;
-	struct bt_l2cap_chan *chan[CONFIG_BT_EATT_MAX] = {};
+	struct bt_l2cap_chan *chan[CONFIG_BT_EATT_MAX+1] = {};
 	int i = 0;
 
 	if (num_channels > CONFIG_BT_EATT_MAX) {
