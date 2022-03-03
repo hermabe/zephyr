@@ -1265,6 +1265,8 @@ response:
 	}
 	rsp->result = sys_cpu_to_le16(result);
 
+	BT_INFO("Responding with result 0x%04X", result);
+
 	net_buf_add_mem(buf, dcid, sizeof(scid) * req_cid_count);
 
 	l2cap_send(conn, BT_L2CAP_CID_LE_SIG, buf);

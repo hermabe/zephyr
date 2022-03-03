@@ -3055,7 +3055,7 @@ static void handle_potential_collision(struct bt_att *att)
 
 	if (att->conn_context.prev_eatt_conn_rsp_result == BT_L2CAP_LE_ERR_NO_RESOURCES &&
 	    att->conn_context.prev_eatt_conn_req_result == BT_L2CAP_LE_ERR_NO_RESOURCES) {
-		BT_DBG("Credit based connection request collision detected");
+		BT_INFO("Credit based connection request collision detected");
 
 		/* Reset to not keep retrying on repeated failures */
 		att->conn_context.prev_eatt_conn_rsp_result = 0;
@@ -3069,6 +3069,8 @@ static void handle_potential_collision(struct bt_att *att)
 		err = att_schedule_eatt_connect(att->conn, to_connect);
 		if (err < 0) {
 			BT_ERR("Failed to schedule EATT connection retry (err: %d)", err);
+		} else {
+			BT_INFO("Scheduled EATT connect with %d channels", to_connect);
 		}
 	}
 }
@@ -3076,6 +3078,8 @@ static void handle_potential_collision(struct bt_att *att)
 static void ecred_connect_req_cb(struct bt_conn *conn, uint16_t result, uint16_t psm)
 {
 	struct bt_att *att = att_get(conn);
+
+	BT_INFO("psm: 0x%04X", psm);
 
 	if (psm != BT_EATT_PSM) {
 		/* Collision mitigation is only a requirement on the EATT PSM */
@@ -3092,6 +3096,8 @@ static void ecred_connect_rsp_cb(struct bt_conn *conn, uint16_t result,
 				 uint16_t psm)
 {
 	struct bt_att *att = att_get(conn);
+
+	BT_INFO("psm: 0x%04X", psm);
 
 	if (psm != BT_EATT_PSM) {
 		/* Collision mitigation is only a requirement on the EATT PSM */
@@ -3111,6 +3117,8 @@ int bt_eatt_connect(struct bt_conn *conn, uint8_t num_channels)
 	struct bt_att *att = att_chan->att;
 	struct bt_l2cap_chan *chan[CONFIG_BT_EATT_MAX+1] = {};
 	int i = 0;
+
+	BT_INFO("num_channels %d", num_channels);
 
 	if (num_channels > CONFIG_BT_EATT_MAX) {
 		return -EINVAL;
