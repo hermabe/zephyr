@@ -4338,10 +4338,10 @@ static void gatt_write_rsp(struct bt_conn *conn, uint8_t err, const void *pdu,
 	params->func(conn, err, params);
 }
 
-int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
-				      const void *data, uint16_t length, bool sign,
-				      bt_gatt_complete_func_t func,
-				      void *user_data)
+static int bt_gatt_write_without_response_impl(struct bt_conn *conn, uint16_t handle,
+					       const void *data, uint16_t length, bool sign,
+					       bt_gatt_complete_func_t func, void *user_data,
+					       enum bt_att_chan_option chan_option)
 {
 	struct net_buf *buf;
 	struct bt_att_write_cmd *cmd;
@@ -4385,8 +4385,22 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 
 	BT_DBG("handle 0x%04x length %u", handle, length);
 
-	/* TODO: chan_option */
-	return bt_att_send(conn, buf, func, user_data, BT_ATT_CHAN_ANY);
+	return bt_att_send(conn, buf, func, user_data, chan_option);
+}
+
+int bt_gatt_write_without_rsp(struct bt_conn *conn, struct bt_gatt_write_without_rsp_params *params)
+{
+	return bt_gatt_write_without_response_impl(conn, params->handle, params->data,
+						   params->length, params->sign, params->func,
+						   params->user_data, BT_ATT_CHAN_OPTION(params));
+}
+
+int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle, const void *data,
+				      uint16_t length, bool sign, bt_gatt_complete_func_t func,
+				      void *user_data)
+{
+	return bt_gatt_write_without_response_impl(conn, handle, data, length, sign, func,
+						   user_data, BT_ATT_CHAN_ANY);
 }
 
 static int gatt_exec_encode(struct net_buf *buf, size_t len, void *user_data)

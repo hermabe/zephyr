@@ -1537,6 +1537,29 @@ struct bt_gatt_write_params {
  */
 int bt_gatt_write(struct bt_conn *conn, struct bt_gatt_write_params *params);
 
+/** @brief GATT Write Without Response parameters */
+struct bt_gatt_write_without_rsp_params {
+	/** Transmission complete callback. */
+	bt_gatt_complete_func_t func;
+	/** Whether to sign data */
+	bool sign;
+	/** Attribute handle. */
+	uint16_t handle;
+	/** Data to be written. */
+	const void *data;
+	/** Data length. */
+	uint16_t length;
+	/** User data to be passed back to callback. */
+	void *user_data;
+#ifdef CONFIG_BT_EATT
+	enum bt_att_chan_option chan_option;
+#endif /* CONFIG_BT_EATT */
+};
+
+/* TODO: Add docs */
+int bt_gatt_write_without_rsp(struct bt_conn *conn,
+			      struct bt_gatt_write_without_rsp_params *params);
+
 /** @brief Write Attribute Value by handle without response with callback.
  *
  *  This function works in the same way as @ref bt_gatt_write_without_response.
@@ -1572,6 +1595,7 @@ int bt_gatt_write(struct bt_conn *conn, struct bt_gatt_write_params *params);
  *  outside the BT RX thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_L2CAP_TX_BUF_COUNT}.
  */
+__deprecated
 int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 				      const void *data, uint16_t length,
 				      bool sign, bt_gatt_complete_func_t func,
@@ -1598,6 +1622,7 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
  *  outside the BT RX thread to get blocking behavior. Queue size is controlled
  *  by @kconfig{CONFIG_BT_L2CAP_TX_BUF_COUNT}.
  */
+__deprecated
 static inline int bt_gatt_write_without_response(struct bt_conn *conn,
 						 uint16_t handle, const void *data,
 						 uint16_t length, bool sign)
