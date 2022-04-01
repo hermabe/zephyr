@@ -828,6 +828,12 @@ config BT_TESTING
 	  This option enables custom Bluetooth testing interface.
 	  Shall only be used for testing purposes.
 
+config BT_TESTING_REORDER
+	bool "Reorder packets"
+	depends on BT_TESTING
+	help
+	  Do not use this. This is a hack for testing.
+
 config BT_CONN_DISABLE_SECURITY
 	bool "Disable security"
 	depends on BT_TESTING

@@ -369,6 +369,45 @@ static struct bt_conn_tx *conn_tx_alloc(void)
 	return k_fifo_get(&free_tx, K_FOREVER);
 }
 
+#if defined(CONFIG_BT_TESTING_REORDER)
+static bool test_store_next;
+void test_set_store_next(void)
+{
+	__ASSERT_NO_MSG(!test_load_next && !test_store_next);
+	test_store_next = true;
+}
+
+static bool test_load_next;
+void test_set_load_next(void)
+{
+	__ASSERT_NO_MSG(!test_load_next && !test_store_next);
+	test_load_next = true;
+}
+
+static void test_reorder(struct k_fifo *queue, struct net_buf *buf)
+{
+	static struct net_buf *stored_buf;
+
+	__ASSERT_NO_MSG(!(test_store_next && test_load_next));
+
+	if (test_store_next) {
+		__ASSERT_NO_MSG(!stored_buf);
+		stored_buf = buf;
+		printk("Stored buffer\n");
+		test_store_next = false;
+	} else if (test_load_next) {
+		__ASSERT_NO_MSG(stored_buf);
+		net_buf_put(queue, buf);
+		net_buf_put(queue, stored_buf);
+		printk("Loaded buffer\n");
+		stored_buf = NULL;
+		test_load_next = false;
+	} else {
+		net_buf_put(queue, buf);
+	}
+}
+#endif /* CONFIG_BT_TESTING_REORDER */
+
 int bt_conn_send_cb(struct bt_conn *conn, struct net_buf *buf,
 		    bt_conn_tx_cb_t cb, void *user_data)
 {
@@ -405,7 +444,12 @@ int bt_conn_send_cb(struct bt_conn *conn, struct net_buf *buf,
 		tx_data(buf)->tx = NULL;
 	}
 
+#if defined(CONFIG_BT_TESTING_REORDER)
+	test_reorder(&conn->tx_queue, buf);
+#else
 	net_buf_put(&conn->tx_queue, buf);
+#endif /* CONFIG_BT_TESTING_REORDER */
+
 	return 0;
 }
 
