@@ -320,15 +320,15 @@ static void test_main(void)
 	chan_1_read.single.handle = chrc_handle;
 	chan_2_read.single.handle = chrc_handle;
 
-	gatt_read(&chan_1_read);
-	gatt_read(&chan_2_read);
+	// gatt_read(&chan_1_read);
+	// gatt_read(&chan_2_read);
 
 	/* Wait until received response on both reads. When robust caching is implemented
 	 * on the client side, the waiting shall be done automatically by the host when
 	 * reading the DB hash.
 	 */
-	WAIT_FOR_FLAG(flag_chan_1_read);
-	WAIT_FOR_FLAG(flag_chan_2_read);
+	// WAIT_FOR_FLAG(flag_chan_1_read);
+	// WAIT_FOR_FLAG(flag_chan_2_read);
 
 	gatt_read(&db_hash_read);
 	WAIT_FOR_FLAG(flag_db_hash_read);
