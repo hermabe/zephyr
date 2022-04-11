@@ -871,11 +871,14 @@ static ssize_t db_hash_read(struct bt_conn *conn,
 	cfg = find_cf_cfg(conn);
 	if (cfg &&
 	    CF_ROBUST_CACHING(cfg) &&
-	    !atomic_test_bit(cfg->flags, CF_CHANGE_AWARE) &&
-	    atomic_test_bit(cfg->flags, CF_OUT_OF_SYNC)) {
-		atomic_clear_bit(cfg->flags, CF_OUT_OF_SYNC);
-		atomic_set_bit(cfg->flags, CF_CHANGE_AWARE);
-		BT_DBG("%s change-aware", bt_addr_le_str(&cfg->peer));
+	    !atomic_test_bit(cfg->flags, CF_CHANGE_AWARE)) {
+		if (atomic_test_bit(cfg->flags, CF_OUT_OF_SYNC)) {
+			atomic_clear_bit(cfg->flags, CF_OUT_OF_SYNC);
+			atomic_set_bit(cfg->flags, CF_CHANGE_AWARE);
+			BT_DBG("%s change-aware", bt_addr_le_str(&cfg->peer));
+		} else {
+			atomic_set_bit(cfg->flags, CF_OUT_OF_SYNC);
+		}
 	}
 
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, db_hash.hash,
