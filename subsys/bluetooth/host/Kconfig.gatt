@@ -247,4 +247,13 @@ config BT_DEBUG_GATT
 
 endif # BT_DEBUG
 
+config BT_AUTO_CLIENT_FEATURES
+	bool "Automatically write to the Client Supported Features Characteristic"
+	default y
+	depends on (BT_EATT || BT_GATT_CACHING || BT_GATT_NOTIFY_MULTIPLE) && BT_GATT_CLIENT
+	help
+		When enabled, the host will automatically discover and write
+		the Client Supported Features Charceristic value after connecting
+		to a server.
+
 endmenu

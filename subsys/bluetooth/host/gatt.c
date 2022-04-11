@@ -600,7 +600,7 @@ static bool cf_set_value(struct gatt_cf_cfg *cfg, const uint8_t *value, uint16_t
 			cfg->data[i] |= value[i];
 		}
 
-		BT_DBG("byte %u: data 0x%02x value 0x%02x", i, cfg->data[i],
+		BT_INFO("byte %u: data 0x%02x value 0x%02x", i, cfg->data[i],
 		       value[i]);
 	}
 
@@ -612,6 +612,7 @@ static ssize_t cf_write(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 {
 	struct gatt_cf_cfg *cfg;
 	const uint8_t *value = buf;
+
 
 	if (offset > sizeof(cfg->data)) {
 		return BT_GATT_ERR(BT_ATT_ERR_INVALID_OFFSET);
@@ -4943,6 +4944,81 @@ static struct bt_gatt_exchange_params gatt_exchange_params = {
 #endif /* CONFIG_BT_GATT_AUTO_UPDATE_MTU */
 #endif /* CONFIG_BT_GATT_CLIENT */
 
+#if defined(CONFIG_BT_AUTO_CLIENT_FEATURES)
+static void csf_write_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_write_params *params)
+{
+	if (err != BT_ATT_ERR_SUCCESS) {
+		BT_ERR("CSF write failed (%d)", err);
+	} else {
+		BT_INFO("CSF write succeeded");
+	}
+}
+
+static void bt_gatt_write_csf(struct bt_conn *conn, uint16_t csf_handle)
+{
+	static const uint8_t csf[CF_NUM_BYTES] = {
+		(IS_ENABLED(CONFIG_BT_GATT_CACHING) << CF_BIT_ROBUST_CACHING) |
+		(IS_ENABLED(CONFIG_BT_EATT) << CF_BIT_EATT) |
+		(IS_ENABLED(CONFIG_BT_GATT_NOTIFY_MULTIPLE) << CF_BIT_NOTIFY_MULTI)
+	};
+	static struct bt_gatt_write_params params = {
+		.func = csf_write_cb,
+		.offset = 0,
+		.data = csf,
+		.length = sizeof(csf),
+	};
+	int err;
+
+	params.handle = csf_handle;
+	err = bt_gatt_write(conn, &params);
+	if (err) {
+		BT_ERR("CSF write failed (err %d)", err);
+	} else {
+		BT_INFO("bt_gatt_write succeeded");
+	}
+}
+
+static uint8_t bt_gatt_dicover_csf_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+				      struct bt_gatt_discover_params *params)
+{
+	struct bt_gatt_chrc *chrc;
+
+	if (attr == NULL) {
+		return BT_GATT_ITER_STOP;
+	}
+
+	if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
+		chrc = attr->user_data;
+		if (bt_uuid_cmp(chrc->uuid, BT_UUID_GATT_CLIENT_FEATURES) == 0) {
+			bt_gatt_write_csf(conn, chrc->value_handle);
+			return BT_GATT_ITER_STOP;
+		}
+	}
+
+	return BT_GATT_ITER_CONTINUE;
+}
+
+static void bt_gatt_discover_csf(struct bt_conn *conn)
+{
+	static struct bt_uuid_16 uuid = BT_UUID_INIT_16(BT_UUID_GATT_CLIENT_FEATURES_VAL);
+	static struct bt_gatt_discover_params params = {
+		.uuid = &uuid.uuid,
+		.func = bt_gatt_dicover_csf_cb,
+		.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE,
+		.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE,
+		.type = BT_GATT_DISCOVER_CHARACTERISTIC,
+	};
+	int err;
+
+	err = bt_gatt_discover(conn, &params);
+	if (err != 0) {
+		BT_ERR("Discovery of CSF failed (%d)", err);
+	} else {
+		BT_INFO("bt_gatt_discover succeeded");
+	}
+}
+#endif /* CONFIG_BT_AUTO_CLIENT_FEATURES */
+
 #define CCC_STORE_MAX 48
 
 static struct bt_gatt_ccc_cfg *ccc_find_cfg(struct _bt_gatt_ccc *ccc,
@@ -5211,6 +5287,9 @@ void bt_gatt_connected(struct bt_conn *conn)
 		BT_WARN("MTU Exchange failed (err %d)", err);
 	}
 #endif /* CONFIG_BT_GATT_AUTO_UPDATE_MTU */
+#if defined(CONFIG_BT_AUTO_CLIENT_FEATURES)
+	bt_gatt_discover_csf(conn);
+#endif /* CONFIG_BT_AUTO_CLIENT_FEATURES */
 #endif /* CONFIG_BT_GATT_CLIENT */
 }
 
