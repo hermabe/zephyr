@@ -1,0 +1,4 @@
+tests:
+  bluetooth.entropy:
+    platform_allow: nrf5340dk_nrf5340_cpuapp
+    tags: bluetooth host
