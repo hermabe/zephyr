@@ -66,6 +66,12 @@ static void update_write_stats(uint16_t len)
 	}
 }
 
+#if defined(CONFIG_BT_EATT)
+#define SET_CHAN_PREFERENCE_ANY(params) (params).chan_pref = BT_ATT_CHAN_ANY
+#else
+#define SET_CHAN_PREFERENCE_ANY(params)
+#endif /* CONFIG_BT_EATT */
+
 static void print_write_stats(void)
 {
 	shell_print(ctx_shell, "Write #%u: %u bytes (%u bps)",
@@ -220,6 +226,7 @@ static int cmd_discover(const struct shell *sh, size_t argc, char *argv[])
 	discover_params.func = discover_func;
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+	SET_CHAN_PREFERENCE_ANY(discover_params);
 
 	if (argc > 1) {
 		/* Only set the UUID if the value is valid (non zero) */
@@ -296,6 +303,7 @@ static int cmd_read(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = 1;
 	read_params.single.handle = strtoul(argv[1], NULL, 16);
 	read_params.single.offset = 0U;
+	SET_CHAN_PREFERENCE_ANY(read_params);
 
 	if (argc > 2) {
 		read_params.single.offset = strtoul(argv[2], NULL, 16);
@@ -341,6 +349,7 @@ static int cmd_mread(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = i;
 	read_params.multiple.handles = h;
 	read_params.multiple.variable = true;
+	SET_CHAN_PREFERENCE_ANY(read_params);
 
 	err = bt_gatt_read(default_conn, &read_params);
 	if (err) {
@@ -369,6 +378,7 @@ static int cmd_read_uuid(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = 0;
 	read_params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	read_params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+	SET_CHAN_PREFERENCE_ANY(read_params);
 
 	if (argc > 1) {
 		uuid.val = strtoul(argv[1], NULL, 16);
@@ -435,6 +445,7 @@ static int cmd_write(const struct shell *sh, size_t argc, char *argv[])
 	write_params.handle = handle;
 	write_params.offset = offset;
 	write_params.func = write_func;
+	SET_CHAN_PREFERENCE_ANY(write_params);
 
 	err = bt_gatt_write(default_conn, &write_params);
 	if (err) {
@@ -556,6 +567,7 @@ static int cmd_subscribe(const struct shell *sh, size_t argc, char *argv[])
 	subscribe_params.value_handle = strtoul(argv[2], NULL, 16);
 	subscribe_params.value = BT_GATT_CCC_NOTIFY;
 	subscribe_params.notify = notify_func;
+	SET_CHAN_PREFERENCE_ANY(subscribe_params);
 
 #if defined(CONFIG_BT_GATT_AUTO_DISCOVER_CCC)
 	if (subscribe_params.ccc_handle == 0) {
@@ -604,6 +616,7 @@ static int cmd_resubscribe(const struct shell *sh, size_t argc,
 	subscribe_params.value_handle = strtoul(argv[4], NULL, 16);
 	subscribe_params.value = BT_GATT_CCC_NOTIFY;
 	subscribe_params.notify = notify_func;
+	SET_CHAN_PREFERENCE_ANY(subscribe_params);
 
 	if (argc > 5 && !strcmp(argv[5], "ind")) {
 		subscribe_params.value = BT_GATT_CCC_INDICATE;
@@ -944,6 +957,7 @@ static int cmd_notify(const struct shell *sh, size_t argc, char *argv[])
 	params.len = sizeof(data);
 	params.func = notify_cb;
 	params.user_data = (void *)sh;
+	SET_CHAN_PREFERENCE_ANY(params);
 
 	bt_gatt_notify_cb(NULL, &params);
 
