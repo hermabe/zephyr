@@ -2185,6 +2185,11 @@ static int gatt_notify(struct bt_conn *conn, uint16_t handle,
 		return -EPERM;
 	}
 
+	if (IS_ENABLED(CONFIG_BT_EATT) &&
+	    !bt_att_chan_pref_valid(conn, BT_ATT_CHAN_PREF(params))) {
+		return -EINVAL;
+	}
+
 #if defined(CONFIG_BT_GATT_NOTIFY_MULTIPLE)
 	if (gatt_cf_notify_multi(conn)) {
 		return gatt_notify_mult(conn, handle, params);
@@ -2259,6 +2264,11 @@ static int gatt_req_send(struct bt_conn *conn, bt_att_func_t func, void *params,
 	struct net_buf *buf;
 	int err;
 
+	if (IS_ENABLED(CONFIG_BT_EATT) &&
+	    !bt_att_chan_pref_valid(conn, chan_pref)) {
+		return -EINVAL;
+	}
+
 	req = gatt_req_alloc(func, params, encode, op, len);
 	if (!req) {
 		return -ENOMEM;
@@ -2316,6 +2326,11 @@ static int gatt_indicate(struct bt_conn *conn, uint16_t handle,
 			       BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_READ_AUTHEN)) {
 		BT_WARN("Link is not encrypted");
 		return -EPERM;
+	}
+
+	if (IS_ENABLED(CONFIG_BT_EATT) &&
+	    !bt_att_chan_pref_valid(conn, BT_ATT_CHAN_PREF(params))) {
+		return -EINVAL;
 	}
 
 	len = sizeof(*ind) + params->len;

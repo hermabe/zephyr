@@ -329,3 +329,5 @@ bool bt_att_tx_meta_data_match(const struct net_buf *buf, bt_gatt_complete_func_
 #else
 #define BT_ATT_CHAN_PREF(_params) BT_ATT_CHAN_UNENHANCED
 #endif /* CONFIG_BT_EATT */
+
+bool bt_att_chan_pref_valid(struct bt_conn *conn, enum bt_att_chan_pref chan_pref);

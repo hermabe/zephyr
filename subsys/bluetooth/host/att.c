@@ -3829,3 +3829,14 @@ bool bt_att_tx_meta_data_match(const struct net_buf *buf, bt_gatt_complete_func_
 		(bt_att_tx_meta_data(buf)->user_data == user_data) &&
 		(bt_att_tx_meta_data(buf)->chan_pref == chan_pref));
 }
+
+bool bt_att_chan_pref_valid(struct bt_conn *conn, enum bt_att_chan_pref chan_pref)
+{
+	/* Choosing EATT requires EATT channels connected and encryption enabled */
+	if (chan_pref == BT_ATT_CHAN_ENHANCED) {
+		return (bt_conn_get_security(conn) > BT_SECURITY_L1) &&
+		       !bt_att_fixed_chan_only(conn);
+	}
+
+	return true;
+}
