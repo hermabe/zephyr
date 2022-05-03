@@ -143,6 +143,7 @@ static void gatt_discover(void)
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
 	discover_params.type = BT_GATT_DISCOVER_PRIMARY;
+	discover_params.chan_pref = BT_ATT_CHAN_ANY;
 
 	err = bt_gatt_discover(g_conn, &discover_params);
 	if (err != 0) {

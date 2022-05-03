@@ -125,6 +125,7 @@ static inline void short_notify(void)
 		.func = notification_sent,
 		.user_data = &length,
 		.uuid = NULL,
+		.chan_pref = BT_ATT_CHAN_ANY,
 	};
 	int err;
 
@@ -149,6 +150,7 @@ static inline void long_notify(void)
 		.func = notification_sent,
 		.user_data = &length,
 		.uuid = NULL,
+		.chan_pref = BT_ATT_CHAN_ANY,
 	};
 	int err;
 
