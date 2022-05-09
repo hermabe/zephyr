@@ -2110,17 +2110,25 @@ static bool gatt_cf_notify_multi(struct bt_conn *conn)
 	return CF_NOTIFY_MULTI(cfg);
 }
 
-static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
-			    struct bt_gatt_notify_params *params)
+static int gatt_notify_mult(struct bt_conn *conn, uint16_t num_params,
+		       struct bt_gatt_notify_params *tuple)
 {
 	struct net_buf **buf = &nfy_mult[bt_conn_index(conn)];
 	struct bt_att_notify_mult *nfy;
+	struct notify_data data;
+	uint16_t pdu_len = 0;
+	int i;
+
+	for (i = 0; i < num_params; i++) {
+		/* Calculate the ATT_MULTIPLE_HANDLE_VALUE_NTF pdu length */
+		pdu_len = pdu_len + sizeof(*nfy) + tuple[i].len;
+	}
 
 	/* Check if we can fit more data into it, in case it doesn't fit send
 	 * the existing buffer and proceed to create a new one
 	 */
-	if (*buf && ((net_buf_tailroom(*buf) < sizeof(*nfy) + params->len) ||
-	    !bt_att_tx_meta_data_match(*buf, params->func, params->user_data))) {
+	if (*buf && ((net_buf_tailroom(*buf) < pdu_len) ||
+		!bt_att_tx_meta_data_match(*buf, tuple[0].func, tuple[0].user_data))) {
 		int ret;
 
 		ret = gatt_notify_mult_send(conn, buf);
@@ -2130,23 +2138,27 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t handle,
 	}
 
 	if (!*buf) {
-		*buf = bt_att_create_pdu(conn, BT_ATT_OP_NOTIFY_MULT,
-					 sizeof(*nfy) + params->len);
+		*buf = bt_att_create_pdu(conn, BT_ATT_OP_NOTIFY_MULT, pdu_len);
 		if (!*buf) {
 			return -ENOMEM;
 		}
 
-		bt_att_set_tx_meta_data(*buf, params->func, params->user_data);
+		bt_att_set_tx_meta_data(*buf, tuple[0].func, tuple[0].user_data);
 	}
 
-	BT_DBG("handle 0x%04x len %u", handle, params->len);
+	for (i = 0; i < num_params; i++) {
+		data.attr = tuple[i].attr;
+		data.handle = bt_gatt_attr_get_handle(data.attr);
 
-	nfy = net_buf_add(*buf, sizeof(*nfy));
-	nfy->handle = sys_cpu_to_le16(handle);
-	nfy->len = sys_cpu_to_le16(params->len);
+		BT_DBG("handle 0x%04x len %u", data.handle, tuple[i].len);
 
-	net_buf_add(*buf, params->len);
-	memcpy(nfy->value, params->data, params->len);
+		nfy = net_buf_add(*buf, sizeof(*nfy));
+		nfy->handle = sys_cpu_to_le16(data.handle);
+		nfy->len = sys_cpu_to_le16(tuple[i].len);
+
+		net_buf_add(*buf, tuple[i].len);
+		memcpy(nfy->value, tuple[i].data, tuple[i].len);
+	}
 
 	k_work_submit(&nfy_mult_work);
 
@@ -2177,12 +2189,6 @@ static int gatt_notify(struct bt_conn *conn, uint16_t handle,
 		BT_WARN("Link is not encrypted");
 		return -EPERM;
 	}
-
-#if defined(CONFIG_BT_GATT_NOTIFY_MULTIPLE)
-	if (gatt_cf_notify_multi(conn)) {
-		return gatt_notify_mult(conn, handle, params);
-	}
-#endif /* CONFIG_BT_GATT_NOTIFY_MULTIPLE */
 
 	buf = bt_att_create_pdu(conn, BT_ATT_OP_NOTIFY,
 				sizeof(*nfy) + params->len);
@@ -2539,23 +2545,80 @@ int bt_gatt_notify_cb(struct bt_conn *conn,
 }
 
 #if defined(CONFIG_BT_GATT_NOTIFY_MULTIPLE)
+
 int bt_gatt_notify_multiple(struct bt_conn *conn, uint16_t num_params,
 			    struct bt_gatt_notify_params *params)
 {
-	int i, ret;
+	struct notify_data data;
+	int i;
 
 	__ASSERT(params, "invalid parameters\n");
 	__ASSERT(num_params, "invalid parameters\n");
 	__ASSERT(params->attr, "invalid parameters\n");
 
+	if (!atomic_test_bit(bt_dev.flags, BT_DEV_READY)) {
+		return -EAGAIN;
+	}
+
+	if (conn && conn->state != BT_CONN_CONNECTED) {
+		return -ENOTCONN;
+	}
+
 	for (i = 0; i < num_params; i++) {
-		ret = bt_gatt_notify_cb(conn, &params[i]);
-		if (ret < 0) {
-			return ret;
+		data.attr = params[i].attr;
+		data.handle = bt_gatt_attr_get_handle(data.attr);
+
+		/* Lookup UUID if it was given */
+		if (params[i].uuid) {
+			if (!gatt_find_by_uuid(&data, params[i].uuid)) {
+				return -ENOENT;
+			}
+
+			params[i].attr = data.attr;
+		} else {
+			if (!data.handle) {
+				return -ENOENT;
+			}
+		}
+
+		/* Check if attribute is a characteristic then adjust the handle */
+		if (!bt_uuid_cmp(data.attr->uuid, BT_UUID_GATT_CHRC)) {
+			struct bt_gatt_chrc *chrc = data.attr->user_data;
+
+			if (!(chrc->properties & BT_GATT_CHRC_NOTIFY)) {
+				return -EINVAL;
+			}
+
+			data.handle = bt_gatt_attr_value_handle(data.attr);
 		}
 	}
 
-	return 0;
+#if defined(CONFIG_BT_GATT_ENFORCE_CHANGE_UNAWARE)
+	/* BLUETOOTH CORE SPECIFICATION Version 5.1 | Vol 3, Part G page 2350:
+	 * Except for the Handle Value indication, the  server shall not send
+	 * notifications and indications to such a client until it becomes
+	 * change-aware.
+	 */
+	if (!bt_gatt_change_aware(conn, false)) {
+		return -EAGAIN;
+	}
+#endif
+
+	for (i = 0; i < num_params; i++) {
+		/* Confirm that the connection has the correct level of security */
+		if (bt_gatt_check_perm(conn, params[i].attr,
+				       BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_READ_AUTHEN)) {
+			BT_WARN("Link is not encrypted");
+			return -EPERM;
+		}
+	}
+
+	if (gatt_cf_notify_multi(conn)) {
+		return gatt_notify_mult(conn, num_params, &params[0]);
+	}
+
+	BT_ERR("No config for CF");
+	return -ENOMEM;
 }
 #endif /* CONFIG_BT_GATT_NOTIFY_MULTIPLE */
 
