@@ -2115,7 +2115,6 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t num_params,
 {
 	struct net_buf **buf = &nfy_mult[bt_conn_index(conn)];
 	struct bt_att_notify_mult *nfy;
-	struct notify_data data;
 	uint16_t pdu_len = 0;
 	int i;
 
@@ -2147,13 +2146,25 @@ static int gatt_notify_mult(struct bt_conn *conn, uint16_t num_params,
 	}
 
 	for (i = 0; i < num_params; i++) {
-		data.attr = tuple[i].attr;
-		data.handle = bt_gatt_attr_get_handle(data.attr);
+		uint16_t handle;
 
-		BT_DBG("handle 0x%04x len %u", data.handle, tuple[i].len);
+		/* Check if attribute is a characteristic then adjust the handle */
+		if (!bt_uuid_cmp(tuple[i].attr->uuid, BT_UUID_GATT_CHRC)) {
+			struct bt_gatt_chrc *chrc = tuple[i].attr->user_data;
+
+			if (!(chrc->properties & BT_GATT_CHRC_NOTIFY)) {
+				return -EINVAL;
+			}
+
+			handle = bt_gatt_attr_value_handle(tuple[i].attr);
+		} else {
+			handle = bt_gatt_attr_get_handle(tuple[i].attr);
+		}
+
+		BT_DBG("handle 0x%04x len %u", handle, tuple[i].len);
 
 		nfy = net_buf_add(*buf, sizeof(*nfy));
-		nfy->handle = sys_cpu_to_le16(data.handle);
+		nfy->handle = sys_cpu_to_le16(handle);
 		nfy->len = sys_cpu_to_le16(tuple[i].len);
 
 		net_buf_add(*buf, tuple[i].len);
@@ -2581,16 +2592,7 @@ int bt_gatt_notify_multiple(struct bt_conn *conn, uint16_t num_params,
 			}
 		}
 
-		/* Check if attribute is a characteristic then adjust the handle */
-		if (!bt_uuid_cmp(data.attr->uuid, BT_UUID_GATT_CHRC)) {
-			struct bt_gatt_chrc *chrc = data.attr->user_data;
 
-			if (!(chrc->properties & BT_GATT_CHRC_NOTIFY)) {
-				return -EINVAL;
-			}
-
-			data.handle = bt_gatt_attr_value_handle(data.attr);
-		}
 	}
 
 #if defined(CONFIG_BT_GATT_ENFORCE_CHANGE_UNAWARE)
