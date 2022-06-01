@@ -239,6 +239,7 @@ static struct bt_l2cap_server server = {
 static int cmd_register(const struct shell *sh, size_t argc, char *argv[])
 {
 	const char *policy;
+	int err;
 
 	if (server.psm) {
 		shell_error(sh, "Already registered");
@@ -263,8 +264,9 @@ static int cmd_register(const struct shell *sh, size_t argc, char *argv[])
 		}
 	}
 
-	if (bt_l2cap_server_register(&server) < 0) {
-		shell_error(sh, "Unable to register psm");
+	err = bt_l2cap_server_register(&server);
+	if (err < 0) {
+		shell_error(sh, "Unable to register psm (err %d)", err);
 		server.psm = 0U;
 		return -ENOEXEC;
 	} else {
