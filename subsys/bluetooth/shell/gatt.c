@@ -268,7 +268,9 @@ static uint8_t read_func(struct bt_conn *conn, uint8_t err,
 {
 	shell_print(ctx_shell, "Read complete: err 0x%02x length %u", err, length);
 
-	if (!data) {
+	if (data) {
+		shell_hexdump(ctx_shell, data, length);
+	} else {
 		(void)memset(params, 0, sizeof(*params));
 		return BT_GATT_ITER_STOP;
 	}
