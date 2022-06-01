@@ -84,8 +84,6 @@ static void exchange_func(struct bt_conn *conn, uint8_t err,
 {
 	shell_print(ctx_shell, "Exchange %s", err == 0U ? "successful" :
 		    "failed");
-
-	(void)memset(params, 0, sizeof(*params));
 }
 
 static struct bt_gatt_exchange_params exchange_params = {
