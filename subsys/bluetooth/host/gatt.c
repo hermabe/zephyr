@@ -575,6 +575,8 @@ static ssize_t cf_read(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 		memcpy(data, cfg->data, sizeof(data));
 	}
 
+	BT_HEXDUMP_DBG(data, sizeof(data), "cf_read data");
+
 	return bt_gatt_attr_read(conn, attr, buf, len, offset, data,
 				 sizeof(data));
 }

@@ -102,3 +102,8 @@ if(CONFIG_BT_CTLR AND CONFIG_BT_LL_SW_SPLIT)
     ${ZEPHYR_BASE}/subsys/bluetooth/controller/ll_sw/nordic
     )
 endif()
+
+zephyr_library_sources_ifdef(
+  CONFIG_BT_UPF
+  upf.c
+)

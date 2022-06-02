@@ -1,0 +1,18 @@
+# To test
+- Encryption
+  - Do others connect EATT channels without encryption?
+  - Can data be sent without encryotion?
+- Client Supported Features Characteristic
+  - Do we need to write to bits here?
+  - Do others write to this?
+- Server Supported Features Characteristic
+  - Do others check this?
+  - Do others expect us to check this?
+- Collision mitigation
+  - Do centrals retry immideately?
+  - Do we need some more complex retry mechanism?
+    - Exponential backoff?
+    - Max retries?
+  - Do others autoconnect EATT channels?
+- Caching
+  - All the cases in the bsim test
