@@ -1128,7 +1128,7 @@ static int cmd_set(const struct shell *sh, size_t argc, char *argv[])
 	return 0;
 }
 
-int cmd_att_mtu(const struct shell *sh, size_t argc, char *argv[])
+static int cmd_att_mtu(const struct shell *sh, size_t argc, char *argv[])
 {
 	uint16_t mtu;
 
