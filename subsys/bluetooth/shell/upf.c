@@ -22,6 +22,7 @@
 #include <zephyr/bluetooth/l2cap.h>
 #include <zephyr/bluetooth/att.h>
 #include <zephyr/bluetooth/gatt.h>
+#include <zephyr/bluetooth/uuid.h>
 
 #include <zephyr/shell/shell.h>
 
@@ -134,7 +135,6 @@ static int cmd_init(const struct shell *sh, size_t argc, char *argv[])
 	return 0;
 }
 
-
 static int cmd_eatt_connect(const struct shell *sh, size_t argc, char *argv[])
 {
 	int err;
@@ -151,12 +151,187 @@ static int cmd_eatt_connect(const struct shell *sh, size_t argc, char *argv[])
 	return 0;
 }
 
-SHELL_STATIC_SUBCMD_SET_CREATE(upf_cmds,
-			       SHELL_CMD_ARG(connect_name, NULL, "<name>", cmd_connect_name, 2, 0),
-			       SHELL_CMD_ARG(init, NULL, "", cmd_init, 1, 0),
-			       SHELL_CMD_ARG(eatt_connect, NULL, "<num_channels>", cmd_eatt_connect,
-					     2, 0),
-			       SHELL_SUBCMD_SET_END);
+static uint16_t csf_handle, ssf_handle, db_handle, sc_handle;
+
+static uint8_t discover_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
+			   struct bt_gatt_discover_params *params)
+{
+	if (!attr) {
+		return BT_GATT_ITER_STOP;
+	}
+
+	const struct bt_gatt_chrc *chrc = (struct bt_gatt_chrc *)attr->user_data;
+
+	if (!bt_uuid_cmp(BT_UUID_GATT_CLIENT_FEATURES, chrc->uuid)) {
+		csf_handle = chrc->value_handle;
+		shell_print(ctx_shell, "CSF handle %04X", csf_handle);
+		return BT_GATT_ITER_STOP;
+	} else if (!bt_uuid_cmp(BT_UUID_GATT_SERVER_FEATURES, chrc->uuid)) {
+		ssf_handle = chrc->value_handle;
+		shell_print(ctx_shell, "SSF handle %04X", csf_handle);
+		return BT_GATT_ITER_STOP;
+	} else if (!bt_uuid_cmp(BT_UUID_GATT_DB_HASH, chrc->uuid)) {
+		db_handle = chrc->value_handle;
+		shell_print(ctx_shell, "DB Hash handle %04X", db_handle);
+		return BT_GATT_ITER_STOP;
+	} else if (!bt_uuid_cmp(BT_UUID_GATT_SC, chrc->uuid)) {
+		sc_handle = chrc->value_handle;
+		shell_print(ctx_shell, "SC handle %04X", csf_handle);
+		return BT_GATT_ITER_STOP;
+	}
+
+	return BT_GATT_ITER_CONTINUE;
+}
+
+static int cmd_discover(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err;
+	const char *characteristic = argv[1];
+	static struct bt_uuid_16 uuid;
+	static struct bt_gatt_discover_params params = {
+		.func = discover_cb,
+		.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE,
+		.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE,
+		.type = BT_GATT_DISCOVER_CHARACTERISTIC,
+		.uuid = &uuid.uuid,
+	};
+
+	if (!strcmp(characteristic, "csf")) {
+		(void)memcpy(&uuid, BT_UUID_GATT_CLIENT_FEATURES, sizeof(uuid));
+	} else if (!strcmp(characteristic, "ssf")) {
+		(void)memcpy(&uuid, BT_UUID_GATT_SERVER_FEATURES, sizeof(uuid));
+	} else if (!strcmp(characteristic, "db")) {
+		(void)memcpy(&uuid, BT_UUID_GATT_DB_HASH, sizeof(uuid));
+	} else if (!strcmp(characteristic, "sc")) {
+		(void)memcpy(&uuid, BT_UUID_GATT_SC, sizeof(uuid));
+	} else {
+		shell_error(sh, "Invalid characteristic choice (csf, ssf, db, sc)");
+		return 1;
+	}
+
+	err = bt_gatt_discover(default_conn, &params);
+	if (err) {
+		shell_error(sh, "Discovery failed (err %d)", err);
+		return err;
+	} else {
+		shell_print(sh, "Discovery request sent");
+	}
+
+	return 0;
+}
+
+uint8_t read_cb(struct bt_conn *conn, uint8_t err, struct bt_gatt_read_params *params,
+		const void *data, uint16_t length)
+{
+	if (err) {
+		shell_error(ctx_shell, "Read request failed (err %d)", err);
+		return BT_GATT_ITER_STOP;
+	}
+
+
+	shell_print(ctx_shell, "Read response");
+	shell_hexdump(ctx_shell, data, length);
+
+	return BT_GATT_ITER_STOP;
+
+}
+
+// static void set_params(struct bt_gatt_read_params *params, struct bt_uuid_16 *uuid_dst,
+// 		       struct bt_uuid *uuid_src, uint16_t handle)
+// {
+// 	if (handle) {
+// 		params->handle_count = 1;
+// 		params->single.handle = handle;
+// 		params->single.offset = 0;
+// 	} else {
+// 		params->handle_count = 0;
+// 		params->by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+// 		params->by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+// 		(void)memcpy(&uuid, uuid, sizeof(*uuid));
+// 		params->by_uuid.uuid = &uuid->uuid;
+// 	}
+// }
+
+static int cmd_read(const struct shell *sh, size_t argc, char *argv[])
+{
+	int err;
+	const char *characteristic = argv[1];
+	static struct bt_uuid_16 uuid = BT_UUID_INIT_16(0);
+	static struct bt_gatt_read_params params = {
+		.func = read_cb,
+	};
+
+	if (!strcmp(characteristic, "csf")) {
+		if (csf_handle) {
+			params.handle_count = 1;
+			params.single.handle = csf_handle;
+			params.single.offset = 0;
+		} else {
+			params.handle_count = 0;
+			params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+			params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+			(void)memcpy(&uuid, BT_UUID_GATT_CLIENT_FEATURES, sizeof(uuid));
+			params.by_uuid.uuid = &uuid.uuid;
+		}
+	} else if (!strcmp(characteristic, "ssf")) {
+		if (ssf_handle) {
+			params.handle_count = 1;
+			params.single.handle = ssf_handle;
+			params.single.offset = 0;
+		} else {
+			params.handle_count = 0;
+			params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+			params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+			(void)memcpy(&uuid, BT_UUID_GATT_SERVER_FEATURES, sizeof(uuid));
+			params.by_uuid.uuid = &uuid.uuid;
+		}
+	} else if (!strcmp(characteristic, "db")) {
+		if (db_handle) {
+			params.handle_count = 1;
+			params.single.handle = db_handle;
+			params.single.offset = 0;
+		} else {
+			params.handle_count = 0;
+			params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+			params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+			(void)memcpy(&uuid, BT_UUID_GATT_DB_HASH, sizeof(uuid));
+			params.by_uuid.uuid = &uuid.uuid;
+		}
+	} else if (!strcmp(characteristic, "sc")) {
+		if (sc_handle) {
+			params.handle_count = 1;
+			params.single.handle = sc_handle;
+			params.single.offset = 0;
+		} else {
+			params.handle_count = 0;
+			params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
+			params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
+			(void)memcpy(&uuid, BT_UUID_GATT_SC, sizeof(uuid));
+			params.by_uuid.uuid = &uuid.uuid;
+		}
+	} else {
+		shell_error(sh, "Invalid characteristic choice (csf, ssf, db, sc)");
+		return 1;
+	}
+
+	err = bt_gatt_read(default_conn, &params);
+	if (err) {
+		shell_error(sh, "Read failed (err %d)", err);
+		return err;
+	} else {
+		shell_print(sh, "Read request sent");
+	}
+
+	return 0;
+}
+
+SHELL_STATIC_SUBCMD_SET_CREATE(
+	upf_cmds, SHELL_CMD_ARG(connect_name, NULL, "<name>", cmd_connect_name, 2, 0),
+	SHELL_CMD_ARG(init, NULL, "", cmd_init, 1, 0),
+	SHELL_CMD_ARG(eatt_connect, NULL, "<num_channels>", cmd_eatt_connect, 2, 0),
+	SHELL_CMD_ARG(discover, NULL, "<char>", cmd_discover, 2, 0),
+	SHELL_CMD_ARG(read, NULL, "<char>", cmd_read, 2, 0),
+	SHELL_SUBCMD_SET_END);
 
 static int cmd_upf(const struct shell *sh, size_t argc, char **argv)
 {
