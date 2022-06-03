@@ -16,3 +16,4 @@
   - Do others autoconnect EATT channels?
 - Caching
   - All the cases in the bsim test
+  - Do others allow reading the DB using the handle, not the "read by uuid"-procedure?
