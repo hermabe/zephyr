@@ -4448,8 +4448,6 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 		return -ENOMEM;
 	}
 
-	bt_att_set_tx_meta_data(buf, func, user_data, BT_ATT_CHAN_ANY);
-
 	cmd = net_buf_add(buf, sizeof(*cmd));
 	cmd->handle = sys_cpu_to_le16(handle);
 
@@ -4463,7 +4461,7 @@ int bt_gatt_write_without_response_cb(struct bt_conn *conn, uint16_t handle,
 
 	BT_DBG("handle 0x%04x length %u", handle, length);
 
-	bt_att_set_tx_meta_data(buf, func, user_data);
+	bt_att_set_tx_meta_data(buf, func, user_data, BT_ATT_CHAN_ANY);
 
 	return bt_att_send(conn, buf);
 }

@@ -27,8 +27,25 @@
 
 #define CHAR_SIZE_MAX           512
 
+BUILD_ASSERT(CONFIG_BT_EATT);
+
 #if defined(CONFIG_BT_GATT_CLIENT) || defined(CONFIG_BT_GATT_DYNAMIC_DB)
 extern uint8_t selected_id;
+
+static enum bt_att_chan_pref get_chan_pref(const char *str)
+{
+	shell_print(ctx_shell, "%s", str);
+	if (!strcmp(str, "E") || !strcmp(str, "EATT")) {
+		shell_print(ctx_shell, "Pref: Enhanced");
+		return BT_ATT_CHAN_ENHANCED;
+	} else if (!strcmp(str, "U") || !strcmp(str, "ATT")) {
+		return BT_ATT_CHAN_UNENHANCED;
+		shell_print(ctx_shell, "Pref: Unenhanced");
+	}
+
+	shell_print(ctx_shell, "Pref: Any");
+	return BT_ATT_CHAN_ANY;
+}
 
 static struct write_stats {
 	uint32_t count;
@@ -226,7 +243,7 @@ static int cmd_discover(const struct shell *sh, size_t argc, char *argv[])
 	discover_params.func = discover_func;
 	discover_params.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	discover_params.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
-	SET_CHAN_PREFERENCE_ANY(discover_params);
+	discover_params.chan_pref = BT_ATT_CHAN_ANY;
 
 	if (argc > 1) {
 		/* Only set the UUID if the value is valid (non zero) */
@@ -241,6 +258,10 @@ static int cmd_discover(const struct shell *sh, size_t argc, char *argv[])
 		if (argc > 3) {
 			discover_params.end_handle = strtoul(argv[3], NULL, 16);
 		}
+	}
+
+	if (argc > 4) {
+		discover_params.chan_pref = get_chan_pref(argv[4]);
 	}
 
 	if (!strcmp(argv[0], "discover")) {
@@ -303,15 +324,20 @@ static int cmd_read(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = 1;
 	read_params.single.handle = strtoul(argv[1], NULL, 16);
 	read_params.single.offset = 0U;
-	SET_CHAN_PREFERENCE_ANY(read_params);
+	read_params.chan_pref = BT_ATT_CHAN_ANY;
 
 	if (argc > 2) {
 		read_params.single.offset = strtoul(argv[2], NULL, 16);
 	}
 
+	if (argc > 3) {
+		read_params.chan_pref = get_chan_pref(argv[3]);
+	}
+
 	err = bt_gatt_read(default_conn, &read_params);
 	if (err) {
 		shell_error(sh, "Read failed (err %d)", err);
+		read_params.func = NULL;
 	} else {
 		shell_print(sh, "Read pending");
 	}
@@ -341,7 +367,7 @@ static int cmd_mread(const struct shell *sh, size_t argc, char *argv[])
 		return -EINVAL;
 	}
 
-	for (i = 0; i < argc - 1; i++) {
+	for (i = 0; i < argc - 2; i++) {
 		h[i] = strtoul(argv[i + 1], NULL, 16);
 	}
 
@@ -349,12 +375,13 @@ static int cmd_mread(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = i;
 	read_params.multiple.handles = h;
 	read_params.multiple.variable = true;
-	SET_CHAN_PREFERENCE_ANY(read_params);
+	read_params.chan_pref = get_chan_pref(argv[i + 1]);
 
 	err = bt_gatt_read(default_conn, &read_params);
 	if (err) {
 		shell_error(sh, "GATT multiple read request failed (err %d)",
 			    err);
+		read_params.func = NULL;
 	}
 
 	return err;
@@ -378,7 +405,7 @@ static int cmd_read_uuid(const struct shell *sh, size_t argc, char *argv[])
 	read_params.handle_count = 0;
 	read_params.by_uuid.start_handle = BT_ATT_FIRST_ATTRIBUTE_HANDLE;
 	read_params.by_uuid.end_handle = BT_ATT_LAST_ATTRIBUTE_HANDLE;
-	SET_CHAN_PREFERENCE_ANY(read_params);
+	read_params.chan_pref = BT_ATT_CHAN_ANY;
 
 	if (argc > 1) {
 		uuid.val = strtoul(argv[1], NULL, 16);
@@ -395,9 +422,14 @@ static int cmd_read_uuid(const struct shell *sh, size_t argc, char *argv[])
 		}
 	}
 
+	if (argc > 4) {
+		read_params.chan_pref = get_chan_pref(argv[4]);
+	}
+
 	err = bt_gatt_read(default_conn, &read_params);
 	if (err) {
 		shell_error(sh, "Read failed (err %d)", err);
+		read_params.func = NULL;
 	} else {
 		shell_print(sh, "Read pending");
 	}
@@ -1162,22 +1194,22 @@ static int cmd_att_mtu(const struct shell *sh, size_t argc, char *argv[])
 SHELL_STATIC_SUBCMD_SET_CREATE(gatt_cmds,
 #if defined(CONFIG_BT_GATT_CLIENT)
 	SHELL_CMD_ARG(discover, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(discover-characteristic, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(discover-descriptor, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(discover-include, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(discover-primary, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(discover-secondary, NULL,
-		      "[UUID] [start handle] [end handle]", cmd_discover, 1, 3),
+		      "[UUID] [start handle] [end handle] [pref]", cmd_discover, 1, 4),
 	SHELL_CMD_ARG(exchange-mtu, NULL, HELP_NONE, cmd_exchange_mtu, 1, 0),
-	SHELL_CMD_ARG(read, NULL, "<handle> [offset]", cmd_read, 2, 1),
-	SHELL_CMD_ARG(read-uuid, NULL, "<UUID> [start handle] [end handle]",
-		      cmd_read_uuid, 2, 2),
-	SHELL_CMD_ARG(read-multiple, NULL, "<handle 1> <handle 2> ...",
+	SHELL_CMD_ARG(read, NULL, "<handle> [offset]", cmd_read, 2, 2),
+	SHELL_CMD_ARG(read-uuid, NULL, "<UUID> [start handle] [end handle] [pref]",
+		      cmd_read_uuid, 2, 3),
+	SHELL_CMD_ARG(read-multiple, NULL, "<handle 1> <handle 2> ... <pref>",
 		      cmd_mread, 2, -1),
 	SHELL_CMD_ARG(signed-write, NULL, "<handle> <data> [length] [repeat]",
 		      cmd_write_without_rsp, 3, 2),

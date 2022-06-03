@@ -2,6 +2,7 @@
 - Encryption
   - Do others connect EATT channels without encryption?
   - Can data be sent without encryotion?
+  - TODO: Re-allow Zephyr to send without encryption for testing.
 - Client Supported Features Characteristic
   - Do we need to write to bits here?
   - Do others write to this?
@@ -17,3 +18,6 @@
 - Caching
   - All the cases in the bsim test
   - Do others allow reading the DB using the handle, not the "read by uuid"-procedure?
+- Procedures disallowed on EATT
+  - MTU exchange
+  - Signed write
