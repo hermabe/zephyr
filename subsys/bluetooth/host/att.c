@@ -2691,8 +2691,8 @@ static int bt_att_recv(struct bt_l2cap_chan *chan, struct net_buf *buf)
 	}
 
 	hdr = net_buf_pull_mem(buf, sizeof(*hdr));
-	BT_DBG("Received ATT chan %p code 0x%02x len %zu", att_chan, hdr->code,
-	       net_buf_frags_len(buf));
+	BT_INFO("Received ATT chan %p CID 0x%04X code 0x%02x len %zu", att_chan,
+		att_chan->chan.tx.cid, hdr->code, net_buf_frags_len(buf));
 
 	if (!att_chan->att) {
 		BT_DBG("Ignore recv on detached ATT chan");
