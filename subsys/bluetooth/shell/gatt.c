@@ -532,7 +532,17 @@ static uint8_t notify_func(struct bt_conn *conn,
 		return BT_GATT_ITER_STOP;
 	}
 
-	shell_print(ctx_shell, "Notification: data %p length %u", data, length);
+	if (params->value == BT_GATT_CCC_NOTIFY) {
+		shell_print(ctx_shell, "Notification: data %p length %u", data, length);
+	} else if (params->value == BT_GATT_CCC_INDICATE) {
+		shell_print(ctx_shell, "Indication: data %p length %u", data, length);
+	} else {
+		shell_error(ctx_shell,
+			    "Unknown subscribe value: %d, neither notifications nor indications",
+			    params->value);
+	}
+
+	shell_hexdump(ctx_shell, data, length);
 
 	return BT_GATT_ITER_CONTINUE;
 }
