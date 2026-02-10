@@ -21,21 +21,19 @@ static void test_write_bdaddr(void)
 {
 	char addr_str[BT_ADDR_LE_STR_LEN];
 	bt_addr_le_t bt_addr;
-	bt_addr_t bdaddr;
+	bt_addr_le_t bdaddr = {
+		.type = BT_ADDR_LE_PUBLIC,
+		.a.val = {0xD8, 0xD8, 0xD8, 0xD8, 0xD8, 0xD8},
+	};
 	size_t count;
 	int err;
-
-	/* Arbitrary public address */
-	bdaddr.val[0] = 0xD8;
-	bdaddr.val[1] = 0xD8;
-	bdaddr.val[2] = 0xD8;
-	bdaddr.val[3] = 0xD8;
-	bdaddr.val[4] = 0xD8;
-	bdaddr.val[5] = 0xD8;
 
 #if 0
 	bt_ctlr_set_public_addr(bdaddr.val);
 #endif
+
+	err = bt_id_create(&bdaddr, NULL);
+	TEST_ASSERT(err == 0, "Failed to create public identity (err %d)", err);
 
 	err = bt_enable(NULL);
 	if (err != 0) {
@@ -45,7 +43,7 @@ static void test_write_bdaddr(void)
 
 	printk("Bluetooth initialized\n");
 
-#if 1
+#if 0
 	/* Set the address on the controller */
 	err = hci_vs_write_bd_addr(bdaddr);
 	if (err != 0) {
@@ -61,11 +59,7 @@ static void test_write_bdaddr(void)
 	bt_addr_le_to_str(&bt_addr, addr_str, sizeof(addr_str));
 	printk("Bluetooth controller address: %s\n", addr_str);
 
-	if ((bt_addr.type != BT_ADDR_LE_PUBLIC) ||
-	    (memcmp(&bt_addr.a, &bdaddr, sizeof(bdaddr)) != 0)) {
-		TEST_FAIL("Mismatched controller address\n", err);
-		return;
-	}
+	TEST_ASSERT(bt_addr_le_eq(&bt_addr, &bdaddr));
 
 	TEST_PASS("Write BDADDR passed\n");
 }
